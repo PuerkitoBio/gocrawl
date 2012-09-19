@@ -24,6 +24,7 @@ func (this *agent) Run() {
 	var e error
 
 	// TODO : Refactor in smaller funcs, defer res.Body.Close
+	defer this.logger.Printf("Agent %d - Done.\n", this.index)
 
 	// Run until channel is closed
 	this.logger.Printf("Agent %d - Waiting for pop...\n", this.index)
@@ -76,5 +77,4 @@ func (this *agent) Run() {
 		}
 		this.logger.Printf("Agent %d - Waiting for pop...\n", this.index)
 	}
-	this.logger.Printf("Agent %d - Done.\n", this.index)
 }

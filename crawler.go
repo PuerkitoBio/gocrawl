@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"net/url"
 	"os"
+	"strings"
 	"time"
 )
 
@@ -37,6 +38,7 @@ type Crawler struct {
 	pop             popChannel
 	visited         []string
 	pushPopRefCount int
+	visits          int
 }
 
 func NewCrawler(seeds ...string) *Crawler {
@@ -46,7 +48,7 @@ func NewCrawler(seeds ...string) *Crawler {
 	ret.RobotUserAgent = DefaultRobotUserAgent
 	ret.Logger = log.New(os.Stdout, "gocrawl ", log.LstdFlags|log.Lmicroseconds)
 	ret.CrawlDelay = DefaultCrawlDelay
-	ret.MaxGoroutines = 1
+	ret.MaxGoroutines = 4
 	ret.SameHostOnly = true
 
 	// Translate seeds strings to URLs
@@ -60,6 +62,8 @@ func NewCrawler(seeds ...string) *Crawler {
 }
 
 func (this *Crawler) Run(cb VisitorFunc) {
+	// TODO : Check options before start
+
 	// Initialize the channels
 
 	// The pop channel will be stacked, so only a buffer of 1 is required
@@ -72,12 +76,14 @@ func (this *Crawler) Run(cb VisitorFunc) {
 	// Feed pop channel with seeds
 	this.enqueueUrls(&urlContainer{nil, this.Seeds})
 
-	a := &agent{cb, this.push, this.pop, this.Logger, 1}
-	go a.Run()
-	this.Logger.Println("Agent 1 launched.")
+	for i := 1; i <= this.MaxGoroutines; i++ {
+		a := &agent{cb, this.push, this.pop, this.Logger, i}
+		go a.Run()
+		this.Logger.Printf("Agent %d launched.\n", i)
+	}
 
-	// Start feeding
-	this.feedUrls()
+	// Start collecting results
+	this.collectUrls()
 }
 
 func (this *Crawler) isVisited(u *url.URL) bool {
@@ -91,13 +97,19 @@ func (this *Crawler) isVisited(u *url.URL) bool {
 
 func (this *Crawler) enqueueUrls(cont *urlContainer) (cnt int) {
 	for _, u := range cont.harvestedUrls {
+
+		// TODO : Normalize URL
+
 		if len(u.Scheme) == 0 || len(u.Host) == 0 {
 			// Only absolute URLs are processed, so ignore
-			this.Logger.Printf("Ignored URL on Absolute URL policy %s\n", u.String())
+			//this.Logger.Printf("Ignored URL on Absolute URL policy %s\n", u.String())
+
+		} else if !strings.HasPrefix(u.Scheme, "http") {
+			this.Logger.Printf("Ignored URL on Invalid Scheme policy %s\n", u.String())
 
 		} else if cont.sourceUrl != nil && u.Host != cont.sourceUrl.Host && this.SameHostOnly {
 			// Only allow URLs coming from the same host
-			this.Logger.Printf("Ignored URL on Same Host policy: %s\n", u.String())
+			//this.Logger.Printf("Ignored URL on Same Host policy: %s\n", u.String())
 
 		} else if !this.isVisited(u) {
 			cnt++
@@ -109,17 +121,22 @@ func (this *Crawler) enqueueUrls(cont *urlContainer) (cnt int) {
 			this.visited = append(this.visited, u.String())
 
 		} else {
-			this.Logger.Printf("Ignored URL on Already Visited policy: %s\n", u.String())
+			//this.Logger.Printf("Ignored URL on Already Visited policy: %s\n", u.String())
 		}
 	}
 	return
 }
 
-func (this *Crawler) feedUrls() {
+func (this *Crawler) collectUrls() {
 	for {
 		select {
 		case cont := <-this.push:
 			// Received a URL container to enqueue
+			this.visits++
+			if this.visits >= this.MaxVisits {
+				close(this.pop)
+				return
+			}
 			this.enqueueUrls(cont)
 			this.pushPopRefCount--
 

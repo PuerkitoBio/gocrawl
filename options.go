@@ -1,11 +1,13 @@
 package gocrawl
 
 import (
-	//"io"
-	"net/url"
-	//"time"
+//"io"
+//"net/url"
+//"time"
 )
 
+// Nah, use a map of rules key=host regex, value=map of options? or options struct?
+/*
 type Options struct {
 	BaseUrlPattern       string
 	IncludeUrlPatterns   []string
@@ -15,3 +17,4 @@ type Options struct {
 	RequestHeadBeforeGet bool
 	MaxVisits            int
 }
+*/
