@@ -11,6 +11,15 @@ import (
 	"time"
 )
 
+type LogLevel int
+
+const (
+	LogError LogLevel = 1 << iota
+	LogInfo
+	LogTrace
+	LogNone LogLevel = 0
+)
+
 const (
 	DefaultUserAgent      string        = `Mozilla/5.0 (Windows NT 6.1; rv:15.0) Gecko/20120716 Firefox/15.0a2`
 	DefaultRobotUserAgent string        = `gocrawl (Googlebot)`
@@ -30,9 +39,12 @@ type Crawler struct {
 	RobotUserAgent string
 	MaxVisits      int
 	MaxGoroutines  int
-	Logger         *log.Logger
-	CrawlDelay     time.Duration // Applied per host
-	SameHostOnly   bool
+
+	Logger   *log.Logger
+	LogLevel LogLevel
+
+	CrawlDelay   time.Duration // Applied per host
+	SameHostOnly bool
 
 	push            chan *urlContainer
 	pop             popChannel
@@ -47,6 +59,7 @@ func NewCrawler(seeds ...string) *Crawler {
 	ret.UserAgent = DefaultUserAgent
 	ret.RobotUserAgent = DefaultRobotUserAgent
 	ret.Logger = log.New(os.Stdout, "gocrawl ", log.LstdFlags|log.Lmicroseconds)
+	ret.LogLevel = LogError
 	ret.CrawlDelay = DefaultCrawlDelay
 	ret.MaxGoroutines = 4
 	ret.SameHostOnly = true
@@ -77,9 +90,11 @@ func (this *Crawler) Run(cb VisitorFunc) {
 	this.enqueueUrls(&urlContainer{nil, this.Seeds})
 
 	for i := 1; i <= this.MaxGoroutines; i++ {
-		a := &agent{cb, this.push, this.pop, this.Logger, i}
+		a := &agent{cb, this.push, this.pop, this.UserAgent, this.Logger, this.LogLevel, i}
 		go a.Run()
-		this.Logger.Printf("Agent %d launched.\n", i)
+		if this.LogLevel|LogTrace == LogTrace {
+			this.Logger.Printf("Agent %d launched.\n", i)
+		}
 	}
 
 	// Start collecting results
@@ -102,18 +117,26 @@ func (this *Crawler) enqueueUrls(cont *urlContainer) (cnt int) {
 
 		if len(u.Scheme) == 0 || len(u.Host) == 0 {
 			// Only absolute URLs are processed, so ignore
-			//this.Logger.Printf("Ignored URL on Absolute URL policy %s\n", u.String())
+			if this.LogLevel|LogTrace == LogTrace {
+				this.Logger.Printf("Ignored URL on Absolute URL policy %s\n", u.String())
+			}
 
 		} else if !strings.HasPrefix(u.Scheme, "http") {
-			this.Logger.Printf("Ignored URL on Invalid Scheme policy %s\n", u.String())
+			if this.LogLevel|LogTrace == LogTrace {
+				this.Logger.Printf("Ignored URL on Invalid Scheme policy %s\n", u.String())
+			}
 
 		} else if cont.sourceUrl != nil && u.Host != cont.sourceUrl.Host && this.SameHostOnly {
 			// Only allow URLs coming from the same host
-			//this.Logger.Printf("Ignored URL on Same Host policy: %s\n", u.String())
+			if this.LogLevel|LogTrace == LogTrace {
+				this.Logger.Printf("Ignored URL on Same Host policy: %s\n", u.String())
+			}
 
 		} else if !this.isVisited(u) {
 			cnt++
-			//this.Logger.Printf("Enqueue URL %s\n", u.String())
+			if this.LogLevel|LogTrace == LogTrace {
+				this.Logger.Printf("Enqueue URL %s\n", u.String())
+			}
 			this.pop.stack(u)
 			this.pushPopRefCount++
 
@@ -121,7 +144,9 @@ func (this *Crawler) enqueueUrls(cont *urlContainer) (cnt int) {
 			this.visited = append(this.visited, u.String())
 
 		} else {
-			//this.Logger.Printf("Ignored URL on Already Visited policy: %s\n", u.String())
+			if this.LogLevel|LogTrace == LogTrace {
+				this.Logger.Printf("Ignored URL on Already Visited policy: %s\n", u.String())
+			}
 		}
 	}
 	return
