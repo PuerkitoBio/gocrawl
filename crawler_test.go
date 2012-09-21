@@ -10,8 +10,9 @@ import (
 
 func TestBasic(t *testing.T) {
 	c := NewCrawler("http://provok.in") //("http://www.cyberpresse.ca", "http://www.radio-canada.ca") //, "http://google.ca")
-	c.MaxVisits = 2
+	c.MaxVisits = 5
 	c.MaxGoroutines = 1
+	c.SameHostOnly = false
 	c.Run(func(r *http.Response, doc *goquery.Document) ([]*url.URL, bool) {
 		time.Sleep(200 * time.Millisecond)
 		return nil, true

@@ -2,6 +2,7 @@ package gocrawl
 
 import (
 	"github.com/PuerkitoBio/goquery"
+	"github.com/PuerkitoBio/purell"
 	//"github.com/temoto/robotstxt.go"
 	"log"
 	"net/http"
@@ -25,6 +26,10 @@ const (
 	DefaultRobotUserAgent string        = `gocrawl (Googlebot)`
 	DefaultCrawlDelay     time.Duration = 5 * time.Second
 )
+
+const urlNormalizationFlags = purell.FlagsUnsafe | purell.FlagDecodeDWORDHost |
+	purell.FlagDecodeOctalHost | purell.FlagDecodeHexHost | purell.FlagRemoveUnnecessaryHostDots |
+	purell.FlagRemoveEmptyPortSeparator
 
 type VisitorFunc func(*http.Response, *goquery.Document) ([]*url.URL, bool)
 
@@ -59,7 +64,7 @@ func NewCrawler(seeds ...string) *Crawler {
 	ret.UserAgent = DefaultUserAgent
 	ret.RobotUserAgent = DefaultRobotUserAgent
 	ret.Logger = log.New(os.Stdout, "gocrawl ", log.LstdFlags|log.Lmicroseconds)
-	ret.LogLevel = LogError
+	ret.LogLevel = LogTrace
 	ret.CrawlDelay = DefaultCrawlDelay
 	ret.MaxGoroutines = 4
 	ret.SameHostOnly = true
@@ -113,7 +118,8 @@ func (this *Crawler) isVisited(u *url.URL) bool {
 func (this *Crawler) enqueueUrls(cont *urlContainer) (cnt int) {
 	for _, u := range cont.harvestedUrls {
 
-		// TODO : Normalize URL
+		// Normalize URL
+		purell.NormalizeURL(u, urlNormalizationFlags)
 
 		if len(u.Scheme) == 0 || len(u.Host) == 0 {
 			// Only absolute URLs are processed, so ignore
