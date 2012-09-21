@@ -3,7 +3,6 @@ package gocrawl
 import (
 	"github.com/PuerkitoBio/goquery"
 	"github.com/PuerkitoBio/purell"
-	//"github.com/temoto/robotstxt.go"
 	"log"
 	"net/http"
 	"net/url"
@@ -167,16 +166,28 @@ func (this *Crawler) enqueueUrls(cont *urlContainer) (cnt int) {
 			}
 
 		} else if !isVisited || forceEnqueue {
-			cnt++
-			if this.LogLevel|LogTrace == LogTrace {
-				this.Logger.Printf("Enqueue URL %s\n", u.String())
-			}
-			this.pop.stack(u)
-			this.pushPopRefCount++
+			// So this URL is targeted to be visited, check robots.txt rule as last
+			// check (since it is costly, and it's the last barrier to visit)
+			if ok, e := isUrlAllowedPerRobots(u, this.RobotUserAgent); !ok || e != nil {
+				if e != nil && this.LogLevel|LogError == LogError {
+					this.Logger.Printf("Error querying robots.txt for URL %s: %s\n", u.String(), e.Error())
+				} else if !ok && this.LogLevel|LogTrace == LogTrace {
+					this.Logger.Printf("Ignored URL on Robots.txt policy %s\n", u.String())
+				}
 
-			// Once it is stacked, it WILL be visited eventually, so add it to the visited slice
-			if !isVisited {
-				this.visited = append(this.visited, u.String())
+			} else {
+				// All is good, visit this URL
+				cnt++
+				if this.LogLevel|LogTrace == LogTrace {
+					this.Logger.Printf("Enqueue URL %s\n", u.String())
+				}
+				this.pop.stack(u)
+				this.pushPopRefCount++
+
+				// Once it is stacked, it WILL be visited eventually, so add it to the visited slice
+				if !isVisited {
+					this.visited = append(this.visited, u.String())
+				}
 			}
 
 		} else {

@@ -16,7 +16,7 @@ func TestBasic(t *testing.T) {
 
 	c.MaxVisits = 5
 	c.MaxGoroutines = 1
-	c.SameHostOnly = false
+	c.SameHostOnly = true
 
 	c.Run()
 }

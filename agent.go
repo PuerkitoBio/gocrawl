@@ -6,6 +6,7 @@ import (
 	"log"
 	"net/http"
 	"net/url"
+	"strings"
 )
 
 var httpClient http.Client
@@ -103,12 +104,15 @@ func (this *agent) processLinks(doc *goquery.Document) (result []*url.URL) {
 		return val
 	})
 	for _, s := range urls {
-		if parsed, e := url.Parse(s); e == nil {
-			parsed = doc.Url.ResolveReference(parsed)
-			result = append(result, parsed)
-		} else {
-			if this.logLevel|LogTrace == LogTrace {
-				this.logger.Printf("Agent %d - URL ignored, unparsable %s: %s\n", this.index, s, e.Error())
+		// If href starts with "#", then it points to this same exact URL, ignore (will fail to parse anyway)
+		if len(s) > 0 && !strings.HasPrefix(s, "#") {
+			if parsed, e := url.Parse(s); e == nil {
+				parsed = doc.Url.ResolveReference(parsed)
+				result = append(result, parsed)
+			} else {
+				if this.logLevel|LogTrace == LogTrace {
+					this.logger.Printf("Agent %d - URL ignored, unparsable %s: %s\n", this.index, s, e.Error())
+				}
 			}
 		}
 	}
