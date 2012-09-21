@@ -11,7 +11,7 @@ import (
 var httpClient http.Client
 
 type agent struct {
-	visitor   VisitorFunc
+	visitor   func(*http.Response, *goquery.Document) ([]*url.URL, bool)
 	push      chan *urlContainer
 	pop       popChannel
 	userAgent string
