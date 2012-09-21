@@ -53,7 +53,7 @@ type Crawler struct {
 	CrawlDelay            time.Duration // Applied per host
 	SameHostOnly          bool
 	UrlNormalizationFlags purell.NormalizationFlags
-	UrlSelector           func(*url.URL, *url.URL, bool) bool
+	UrlSelector           func(target *url.URL, origin *url.URL, isVisited bool) bool
 
 	push            chan *urlContainer
 	pop             popChannel
@@ -133,10 +133,22 @@ func (this *Crawler) isVisited(u *url.URL) bool {
 
 func (this *Crawler) enqueueUrls(cont *urlContainer) (cnt int) {
 	for _, u := range cont.harvestedUrls {
+		var isVisited, forceEnqueue bool
 
 		// Normalize URL
 		purell.NormalizeURL(u, DefaultNormalizationFlags)
+		isVisited = this.isVisited(u)
 
+		// If a selector callback is specified, use this to filter URL
+		if this.UrlSelector != nil {
+			if forceEnqueue = this.UrlSelector(u, cont.sourceUrl, isVisited); !forceEnqueue {
+				// Custom selector said NOT to use this url, so continue with next
+				continue
+			}
+		}
+
+		// Even if custom selector said to use the URL, it still MUST be absolute, http-prefixed,
+		// and comply with the same host if requested.
 		if len(u.Scheme) == 0 || len(u.Host) == 0 {
 			// Only absolute URLs are processed, so ignore
 			if this.LogLevel|LogTrace == LogTrace {
@@ -154,7 +166,7 @@ func (this *Crawler) enqueueUrls(cont *urlContainer) (cnt int) {
 				this.Logger.Printf("Ignored URL on Same Host policy: %s\n", u.String())
 			}
 
-		} else if !this.isVisited(u) {
+		} else if !isVisited || forceEnqueue {
 			cnt++
 			if this.LogLevel|LogTrace == LogTrace {
 				this.Logger.Printf("Enqueue URL %s\n", u.String())
@@ -163,7 +175,9 @@ func (this *Crawler) enqueueUrls(cont *urlContainer) (cnt int) {
 			this.pushPopRefCount++
 
 			// Once it is stacked, it WILL be visited eventually, so add it to the visited slice
-			this.visited = append(this.visited, u.String())
+			if !isVisited {
+				this.visited = append(this.visited, u.String())
+			}
 
 		} else {
 			if this.LogLevel|LogTrace == LogTrace {
