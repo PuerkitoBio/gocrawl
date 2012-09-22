@@ -54,8 +54,10 @@ type Crawler struct {
 	UrlNormalizationFlags purell.NormalizationFlags
 	UrlSelector           func(target *url.URL, origin *url.URL, isVisited bool) bool
 
-	push            chan *urlContainer
-	pop             popChannel
+	push chan *urlContainer
+	pop  popChannel
+	stop chan bool
+
 	visited         []string
 	pushPopRefCount int
 	visits          int
@@ -106,6 +108,9 @@ func (this *Crawler) Run() {
 	// The push channel needs a buffer equal to the # of goroutines (+1?)
 	this.push = make(chan *urlContainer, this.MaxGoroutines)
 
+	// The stop channel is used to tell agents to stop looping
+	this.stop = make(chan bool)
+
 	this.enqueueUrls(&urlContainer{nil, this.Seeds})
 	this.launchAgents()
 	this.collectUrls()
@@ -113,7 +118,7 @@ func (this *Crawler) Run() {
 
 func (this *Crawler) launchAgents() {
 	for i := 1; i <= this.MaxGoroutines; i++ {
-		a := &agent{this.UrlVisitor, this.push, this.pop, this.UserAgent, this.Logger, this.LogLevel, i}
+		a := &agent{this.UrlVisitor, this.push, this.pop, this.stop, this.UserAgent, this.Logger, this.LogLevel, i}
 		go a.Run()
 		if this.LogLevel|LogTrace == LogTrace {
 			this.Logger.Printf("Agent %d launched.\n", i)
@@ -215,7 +220,7 @@ func (this *Crawler) collectUrls() {
 		default:
 			// Check if refcount is zero
 			if this.pushPopRefCount == 0 {
-				close(this.pop)
+				this.stop <- true
 				return
 			} else {
 				time.Sleep(100 * time.Millisecond)

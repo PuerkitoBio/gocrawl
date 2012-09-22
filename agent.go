@@ -15,6 +15,7 @@ type agent struct {
 	visitor   func(*http.Response, *goquery.Document) ([]*url.URL, bool)
 	push      chan *urlContainer
 	pop       popChannel
+	stop      chan bool
 	userAgent string
 	logger    *log.Logger
 	logLevel  LogLevel
@@ -28,17 +29,28 @@ func (this *agent) Run() {
 		}
 	}()
 
-	// Run until channel is closed
-	if this.logLevel|LogTrace == LogTrace {
-		this.logger.Printf("Agent %d - Waiting for pop...\n", this.index)
-	}
-	for u, ok := this.pop.get(); ok; u, ok = this.pop.get() {
-		if this.logLevel|LogTrace == LogTrace {
-			this.logger.Printf("Agent %d - Popped %s.\n", this.index, u.String())
-		}
-		this.requestUrl(u)
+	for {
+		// Run until stop signal
 		if this.logLevel|LogTrace == LogTrace {
 			this.logger.Printf("Agent %d - Waiting for pop...\n", this.index)
+		}
+
+		select {
+		case <-this.stop:
+			if this.logLevel|LogTrace == LogTrace {
+				this.logger.Printf("Agent %d - Stop signal received.\n", this.index)
+			}
+			return
+
+		default:
+			u := this.pop.get()
+			if this.logLevel|LogTrace == LogTrace {
+				this.logger.Printf("Agent %d - Popped %s.\n", this.index, u.String())
+			}
+			this.requestUrl(u)
+			if this.logLevel|LogTrace == LogTrace {
+				this.logger.Printf("Agent %d - Waiting for pop...\n", this.index)
+			}
 		}
 	}
 }
