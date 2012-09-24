@@ -21,7 +21,7 @@ type worker struct {
 	robotUserAgent string
 	logFunc        func(LogLevel, string, ...interface{})
 	index          int
-	wg             sync.WaitGroup
+	wg             *sync.WaitGroup
 	crawlDelay     time.Duration
 	robotsData     *robotstxt.RobotsData
 }
@@ -29,7 +29,6 @@ type worker struct {
 func (this *worker) Run() {
 	defer func() {
 		this.logFunc(LogTrace, "Done.\n")
-		this.wg.Done()
 	}()
 
 	// Enter loop to process URLs until stop signal is received
@@ -42,6 +41,7 @@ func (this *worker) Run() {
 		select {
 		case <-this.stop:
 			this.logFunc(LogTrace, "Stop signal received.\n")
+			this.wg.Done()
 			return
 
 		default:

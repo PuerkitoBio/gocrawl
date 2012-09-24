@@ -16,7 +16,7 @@ func TestBasic(t *testing.T) {
 
 	c.CrawlDelay = 2 * time.Second
 	c.MaxVisits = 5
-	c.SameHostOnly = false
+	c.SameHostOnly = true
 
 	c.Run()
 }

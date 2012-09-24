@@ -112,6 +112,9 @@ func (this *Crawler) Run() {
 	// Start with the seeds, and loop till death
 	this.enqueueUrls(&urlContainer{nil, this.Seeds})
 	this.collectUrls()
+	this.logFunc(LogTrace, "Waiting for goroutines to complete...\n")
+	this.wg.Wait()
+	this.logFunc(LogTrace, "Done.\n")
 }
 
 func (this *Crawler) launchWorker(u *url.URL) *worker {
@@ -127,7 +130,7 @@ func (this *Crawler) launchWorker(u *url.URL) *worker {
 		this.RobotUserAgent,
 		getLogFunc(this.Logger, this.LogLevel, i),
 		i,
-		this.wg,
+		&this.wg,
 		this.CrawlDelay,
 		nil}
 
@@ -209,12 +212,6 @@ func (this *Crawler) enqueueUrls(cont *urlContainer) (cnt int) {
 }
 
 func (this *Crawler) collectUrls() {
-	defer func() {
-		this.logFunc(LogTrace, "Waiting for goroutines to complete...\n")
-		this.wg.Wait()
-		this.logFunc(LogTrace, "Done.\n")
-	}()
-
 	stopAll := func() {
 		this.logFunc(LogTrace, "Sending STOP signals...\n")
 		for _, w := range this.workers {
