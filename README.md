@@ -17,5 +17,8 @@ gocrawl does not attempt to detect staleness of a page, nor does it implement a 
 
 Likewise, there is no prioritization among the URLs to process. It assumes that all enqueued URLs must be visited at some point, and that the order in which they are is unimportant.
 
+By default, uses the default net/http.Client. This default will automatically follow redirects up to 10 times (see the [net/http doc for Client struct][netclient]). It will be possible to provide a custom Fetcher interface implementation.
+
 [goquery]: https://github.com/PuerkitoBio/goquery
 [robotstxt]: https://github.com/temoto/robotstxt.go
+[netclient]: http://golang.org/pkg/net/http/#Client

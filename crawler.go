@@ -7,18 +7,10 @@ import (
 	"net/http"
 	"net/url"
 	"os"
+	"sort"
 	"strings"
+	"sync"
 	"time"
-)
-
-type LogLevel uint
-
-// Log levels for the library's logger
-const (
-	LogError LogLevel = 1 << iota
-	LogInfo
-	LogTrace
-	LogNone LogLevel = 0
 )
 
 // Default options
@@ -26,9 +18,7 @@ const (
 	DefaultUserAgent          string                    = `Mozilla/5.0 (Windows NT 6.1; rv:15.0) Gecko/20120716 Firefox/15.0a2`
 	DefaultRobotUserAgent     string                    = `gocrawl (Googlebot)`
 	DefaultCrawlDelay         time.Duration             = 5 * time.Second
-	DefaultNormalizationFlags purell.NormalizationFlags = purell.FlagsUnsafe | purell.FlagDecodeDWORDHost |
-		purell.FlagDecodeOctalHost | purell.FlagDecodeHexHost | purell.FlagRemoveUnnecessaryHostDots |
-		purell.FlagRemoveEmptyPortSeparator
+	DefaultNormalizationFlags purell.NormalizationFlags = purell.FlagsAllGreedy
 )
 
 // URL container returned by agents to the crawler
@@ -37,17 +27,22 @@ type urlContainer struct {
 	harvestedUrls []*url.URL
 }
 
+type workerInfo struct {
+	w   *worker
+	pop popChannel
+}
+
 // The crawler itself, the master of the whole process
 type Crawler struct {
 	Seeds          []*url.URL
 	UserAgent      string
 	RobotUserAgent string
 	MaxVisits      int
-	MaxGoroutines  int
 	UrlVisitor     func(*http.Response, *goquery.Document) ([]*url.URL, bool)
 
 	Logger   *log.Logger
 	LogLevel LogLevel
+	logFunc  func(LogLevel, string, ...interface{})
 
 	CrawlDelay            time.Duration // Applied per host
 	SameHostOnly          bool
@@ -55,12 +50,14 @@ type Crawler struct {
 	UrlSelector           func(target *url.URL, origin *url.URL, isVisited bool) bool
 
 	push chan *urlContainer
-	pop  popChannel
 	stop chan bool
+	wg   sync.WaitGroup
 
-	visited         []string
-	pushPopRefCount int
-	visits          int
+	visited          []string
+	pushPopRefCount  int
+	visits           int
+	workers          map[string]*workerInfo
+	initialHostCount int
 }
 
 // Major steps needing hooks (implement as middleware funcs?):
@@ -76,6 +73,7 @@ type Crawler struct {
 //   * Is an interesting URL (based on pattern)
 
 func New(visitor func(*http.Response, *goquery.Document) ([]*url.URL, bool), seeds ...string) *Crawler {
+
 	// Use sane defaults
 	ret := new(Crawler)
 	ret.UserAgent = DefaultUserAgent
@@ -83,47 +81,79 @@ func New(visitor func(*http.Response, *goquery.Document) ([]*url.URL, bool), see
 	ret.Logger = log.New(os.Stdout, "gocrawl ", log.LstdFlags|log.Lmicroseconds)
 	ret.LogLevel = LogTrace
 	ret.CrawlDelay = DefaultCrawlDelay
-	ret.MaxGoroutines = 4
 	ret.SameHostOnly = true
 	ret.UrlNormalizationFlags = DefaultNormalizationFlags
 	ret.UrlVisitor = visitor
 
-	// Translate seeds strings to URLs
+	// Translate seeds strings to URLs, normalized right away (to allow host count)
+	hosts := make([]string, 10)
 	for _, s := range seeds {
-		if u, e := url.Parse(s); e == nil {
-			ret.Seeds = append(ret.Seeds, u)
+		if u, e := purell.NormalizeURLString(s, ret.UrlNormalizationFlags); e != nil {
+			if ret.LogLevel|LogError == LogError {
+				ret.Logger.Printf("Error parsing seed URL %s\n", s)
+			}
+		} else {
+			parsed, _ := url.Parse(u)
+			ret.Seeds = append(ret.Seeds, parsed)
+			if sort.SearchStrings(hosts, parsed.Host) < 0 {
+				hosts = append(hosts, parsed.Host)
+				sort.Strings(hosts)
+			}
 		}
 	}
+	ret.initialHostCount = len(hosts)
 
 	return ret
 }
 
+// TODO : If run as a goroutine, can the caller modify fields on the struct? Provide IsRunning(), Stop(), Pause()?
+
 func (this *Crawler) Run() {
 	// TODO : Check options before start
-
-	// The pop channel will be stacked, so only a buffer of 1 is required
-	// see http://gowithconfidence.tumblr.com/post/31426832143/stacked-channels
-	this.pop = newPopChannel()
-
-	// The push channel needs a buffer equal to the # of goroutines (+1?)
-	this.push = make(chan *urlContainer, this.MaxGoroutines)
 
 	// The stop channel is used to tell agents to stop looping
 	this.stop = make(chan bool)
 
+	// Help log function, takes care of filtering based on level
+	this.logFunc = getLogFunc(this.Logger, this.LogLevel, -1)
+
+	// Create the workers map
+	this.logFunc(LogTrace, "Initial host count is %d\n", this.initialHostCount)
+	if this.SameHostOnly {
+		this.workers = make(map[string]*workerInfo, this.initialHostCount)
+		this.push = make(chan *urlContainer, this.initialHostCount)
+	} else {
+		this.workers = make(map[string]*workerInfo, 10*this.initialHostCount)
+		this.push = make(chan *urlContainer, 10*this.initialHostCount)
+	}
+
+	// Start with the seeds, and loop till death
 	this.enqueueUrls(&urlContainer{nil, this.Seeds})
-	this.launchAgents()
 	this.collectUrls()
 }
 
-func (this *Crawler) launchAgents() {
-	for i := 1; i <= this.MaxGoroutines; i++ {
-		a := &agent{this.UrlVisitor, this.push, this.pop, this.stop, this.UserAgent, this.Logger, this.LogLevel, i}
-		go a.Run()
-		if this.LogLevel|LogTrace == LogTrace {
-			this.Logger.Printf("Agent %d launched.\n", i)
-		}
-	}
+func (this *Crawler) launchWorker(u *url.URL) *workerInfo {
+	i := len(this.workers) + 1
+	pop := newPopChannel()
+
+	w := &worker{this.UrlVisitor,
+		this.push,
+		pop,
+		this.stop,
+		this.UserAgent,
+		this.RobotUserAgent,
+		getLogFunc(this.Logger, this.LogLevel, i),
+		i,
+		this.wg,
+		this.CrawlDelay,
+		nil}
+
+	this.wg.Add(1)
+	go w.Run()
+	this.logFunc(LogTrace, "Worker %d launched.\n", i)
+	this.workers[u.Host] = &workerInfo{w, pop}
+
+	return this.workers[u.Host]
 }
 
 func (this *Crawler) isVisited(u *url.URL) bool {
@@ -155,50 +185,41 @@ func (this *Crawler) enqueueUrls(cont *urlContainer) (cnt int) {
 		// and comply with the same host if requested.
 		if len(u.Scheme) == 0 || len(u.Host) == 0 {
 			// Only absolute URLs are processed, so ignore
-			if this.LogLevel|LogTrace == LogTrace {
-				this.Logger.Printf("Ignored URL on Absolute URL policy %s\n", u.String())
-			}
+			this.logFunc(LogTrace, "Ignored URL on Absolute URL policy %s\n", u.String())
 
 		} else if !strings.HasPrefix(u.Scheme, "http") {
-			if this.LogLevel|LogTrace == LogTrace {
-				this.Logger.Printf("Ignored URL on Invalid Scheme policy %s\n", u.String())
-			}
+			this.logFunc(LogTrace, "Ignored URL on Invalid Scheme policy %s\n", u.String())
 
 		} else if cont.sourceUrl != nil && u.Host != cont.sourceUrl.Host && this.SameHostOnly {
 			// Only allow URLs coming from the same host
-			if this.LogLevel|LogTrace == LogTrace {
-				this.Logger.Printf("Ignored URL on Same Host policy: %s\n", u.String())
-			}
+			this.logFunc(LogTrace, "Ignored URL on Same Host policy: %s\n", u.String())
 
 		} else if !isVisited || forceEnqueue {
-			// So this URL is targeted to be visited, check robots.txt rule as last
-			// check (since it is costly, and it's the last barrier to visit)
-			if ok, e := isUrlAllowedPerRobots(u, this.RobotUserAgent); !ok || e != nil {
-				if e != nil && this.LogLevel|LogError == LogError {
-					this.Logger.Printf("Error querying robots.txt for URL %s: %s\n", u.String(), e.Error())
-				} else if !ok && this.LogLevel|LogTrace == LogTrace {
-					this.Logger.Printf("Ignored URL on Robots.txt policy %s\n", u.String())
-				}
+			// All is good, visit this URL (robots.txt verification is done by worker)
 
-			} else {
-				// All is good, visit this URL
-				cnt++
-				if this.LogLevel|LogTrace == LogTrace {
-					this.Logger.Printf("Enqueue URL %s\n", u.String())
-				}
-				this.pop.stack(u)
-				this.pushPopRefCount++
+			// Launch worker if required
+			wi, ok := this.workers[u.Host]
+			if !ok {
+				wi = this.launchWorker(u)
+				// Automatically enqueue the robots.txt URL as first in line
+				// TODO : Error
+				robUrl, _ := u.Parse("/robots.txt")
+				this.logFunc(LogTrace, "Enqueue URL %s\n", robUrl.String())
+				wi.pop.stack(robUrl)
+			}
 
-				// Once it is stacked, it WILL be visited eventually, so add it to the visited slice
-				if !isVisited {
-					this.visited = append(this.visited, u.String())
-				}
+			cnt++
+			this.logFunc(LogTrace, "Enqueue URL %s\n", u.String())
+			wi.pop.stack(u)
+			this.pushPopRefCount++
+
+			// Once it is stacked, it WILL be visited eventually, so add it to the visited slice
+			if !isVisited {
+				this.visited = append(this.visited, u.String())
 			}
 
 		} else {
-			if this.LogLevel|LogTrace == LogTrace {
-				this.Logger.Printf("Ignored URL on Already Visited policy: %s\n", u.String())
-			}
+			this.logFunc(LogTrace, "Ignored URL on Already Visited policy: %s\n", u.String())
 		}
 	}
 	return
@@ -211,7 +232,7 @@ func (this *Crawler) collectUrls() {
 			// Received a URL container to enqueue
 			this.visits++
 			if this.visits >= this.MaxVisits {
-				close(this.pop)
+				this.stop <- true
 				return
 			}
 			this.enqueueUrls(cont)

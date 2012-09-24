@@ -14,9 +14,9 @@ func TestBasic(t *testing.T) {
 		return nil, true
 	}, "http://provok.in") //, "http://www.cyberpresse.ca") //("http://www.cyberpresse.ca", "http://www.radio-canada.ca") //, "http://google.ca")
 
+	c.CrawlDelay = 2 * time.Second
 	c.MaxVisits = 5
-	c.MaxGoroutines = 1
-	c.SameHostOnly = false // TODO : Problem, panics on closed channel when same host false and checks multiple robots.txt
+	c.SameHostOnly = false
 
 	c.Run()
 }
