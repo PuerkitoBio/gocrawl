@@ -27,50 +27,35 @@ type urlContainer struct {
 	harvestedUrls []*url.URL
 }
 
-type workerInfo struct {
-	w   *worker
-	pop popChannel
-}
-
 // The crawler itself, the master of the whole process
 type Crawler struct {
-	Seeds          []*url.URL
-	UserAgent      string
-	RobotUserAgent string
-	MaxVisits      int
-	UrlVisitor     func(*http.Response, *goquery.Document) ([]*url.URL, bool)
+	Seeds []*url.URL
 
+	// Crawler options
+	UserAgent             string
+	RobotUserAgent        string
+	MaxVisits             int
+	CrawlDelay            time.Duration // Applied per host
+	SameHostOnly          bool
+	UrlNormalizationFlags purell.NormalizationFlags
+	UrlVisitor            func(*http.Response, *goquery.Document) ([]*url.URL, bool)
+	UrlSelector           func(target *url.URL, origin *url.URL, isVisited bool) bool
+
+	// Logging
 	Logger   *log.Logger
 	LogLevel LogLevel
 	logFunc  func(LogLevel, string, ...interface{})
 
-	CrawlDelay            time.Duration // Applied per host
-	SameHostOnly          bool
-	UrlNormalizationFlags purell.NormalizationFlags
-	UrlSelector           func(target *url.URL, origin *url.URL, isVisited bool) bool
-
+	// Internal fields
 	push chan *urlContainer
-	stop chan bool
 	wg   sync.WaitGroup
 
 	visited          []string
 	pushPopRefCount  int
 	visits           int
-	workers          map[string]*workerInfo
+	workers          map[string]*worker
 	initialHostCount int
 }
-
-// Major steps needing hooks (implement as middleware funcs?):
-//
-// - Prior to add to queue
-//   * Normalize URL
-//   * Is already visited?
-//   * Is allowed by Robots.txt?
-//   * Is same host
-//   * Custom
-//   * Is absolute URL
-//   * Is http(s) scheme
-//   * Is an interesting URL (based on pattern)
 
 func New(visitor func(*http.Response, *goquery.Document) ([]*url.URL, bool), seeds ...string) *Crawler {
 
@@ -111,19 +96,16 @@ func New(visitor func(*http.Response, *goquery.Document) ([]*url.URL, bool), see
 func (this *Crawler) Run() {
 	// TODO : Check options before start
 
-	// The stop channel is used to tell agents to stop looping
-	this.stop = make(chan bool)
-
 	// Help log function, takes care of filtering based on level
 	this.logFunc = getLogFunc(this.Logger, this.LogLevel, -1)
 
-	// Create the workers map
+	// Create the workers map and the push channel (send harvested URLs to the crawler to enqueue)
 	this.logFunc(LogTrace, "Initial host count is %d\n", this.initialHostCount)
 	if this.SameHostOnly {
-		this.workers = make(map[string]*workerInfo, this.initialHostCount)
+		this.workers = make(map[string]*worker, this.initialHostCount)
 		this.push = make(chan *urlContainer, this.initialHostCount)
 	} else {
-		this.workers = make(map[string]*workerInfo, 10*this.initialHostCount)
+		this.workers = make(map[string]*worker, 10*this.initialHostCount)
 		this.push = make(chan *urlContainer, 10*this.initialHostCount)
 	}
 
@@ -132,14 +114,15 @@ func (this *Crawler) Run() {
 	this.collectUrls()
 }
 
-func (this *Crawler) launchWorker(u *url.URL) *workerInfo {
+func (this *Crawler) launchWorker(u *url.URL) *worker {
 	i := len(this.workers) + 1
 	pop := newPopChannel()
+	stop := make(chan bool, 1)
 
 	w := &worker{this.UrlVisitor,
 		this.push,
 		pop,
-		this.stop,
+		stop,
 		this.UserAgent,
 		this.RobotUserAgent,
 		getLogFunc(this.Logger, this.LogLevel, i),
@@ -151,9 +134,9 @@ func (this *Crawler) launchWorker(u *url.URL) *workerInfo {
 	this.wg.Add(1)
 	go w.Run()
 	this.logFunc(LogTrace, "Worker %d launched.\n", i)
-	this.workers[u.Host] = &workerInfo{w, pop}
+	this.workers[u.Host] = w
 
-	return this.workers[u.Host]
+	return w
 }
 
 func (this *Crawler) isVisited(u *url.URL) bool {
@@ -198,19 +181,19 @@ func (this *Crawler) enqueueUrls(cont *urlContainer) (cnt int) {
 			// All is good, visit this URL (robots.txt verification is done by worker)
 
 			// Launch worker if required
-			wi, ok := this.workers[u.Host]
+			w, ok := this.workers[u.Host]
 			if !ok {
-				wi = this.launchWorker(u)
+				w = this.launchWorker(u)
 				// Automatically enqueue the robots.txt URL as first in line
 				// TODO : Error
 				robUrl, _ := u.Parse("/robots.txt")
 				this.logFunc(LogTrace, "Enqueue URL %s\n", robUrl.String())
-				wi.pop.stack(robUrl)
+				w.pop.stack(robUrl)
 			}
 
 			cnt++
 			this.logFunc(LogTrace, "Enqueue URL %s\n", u.String())
-			wi.pop.stack(u)
+			w.pop.stack(u)
 			this.pushPopRefCount++
 
 			// Once it is stacked, it WILL be visited eventually, so add it to the visited slice
@@ -226,13 +209,26 @@ func (this *Crawler) enqueueUrls(cont *urlContainer) (cnt int) {
 }
 
 func (this *Crawler) collectUrls() {
+	defer func() {
+		this.logFunc(LogTrace, "Waiting for goroutines to complete...\n")
+		this.wg.Wait()
+		this.logFunc(LogTrace, "Done.\n")
+	}()
+
+	stopAll := func() {
+		this.logFunc(LogTrace, "Sending STOP signals...\n")
+		for _, w := range this.workers {
+			w.stop <- true
+		}
+	}
+
 	for {
 		select {
 		case cont := <-this.push:
 			// Received a URL container to enqueue
 			this.visits++
 			if this.visits >= this.MaxVisits {
-				this.stop <- true
+				stopAll()
 				return
 			}
 			this.enqueueUrls(cont)
@@ -241,7 +237,7 @@ func (this *Crawler) collectUrls() {
 		default:
 			// Check if refcount is zero
 			if this.pushPopRefCount == 0 {
-				this.stop <- true
+				stopAll()
 				return
 			} else {
 				time.Sleep(100 * time.Millisecond)

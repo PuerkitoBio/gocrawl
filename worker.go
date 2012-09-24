@@ -16,7 +16,7 @@ type worker struct {
 	visitor        func(*http.Response, *goquery.Document) ([]*url.URL, bool)
 	push           chan<- *urlContainer
 	pop            popChannel
-	stop           <-chan bool
+	stop           chan bool
 	userAgent      string
 	robotUserAgent string
 	logFunc        func(LogLevel, string, ...interface{})
@@ -47,6 +47,8 @@ func (this *worker) Run() {
 		default:
 
 			// Get the next URL to crawl
+			// TODO : This is a sync problem, because it can wait here indefinitely and will never catch the stop signal
+			// not sure the stacked channel is such a great idea in this case...
 			u := this.pop.get()
 			this.logFunc(LogTrace, "Popped %s.\n", u.String())
 			if this.robotsData != nil {

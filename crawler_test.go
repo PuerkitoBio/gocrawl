@@ -28,3 +28,5 @@ func TestLevels(t *testing.T) {
 	t.Logf("LogTrace=%d", LogTrace)
 	t.Logf("LogTrace|LogError=%d", LogTrace|LogError)
 }
+
+// TODO : Use a Fetcher with static data for tests
