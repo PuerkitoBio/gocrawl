@@ -29,19 +29,16 @@ type worker struct {
 func (this *worker) Run() {
 	defer func() {
 		this.logFunc(LogTrace, "Done.\n")
+		this.wg.Done()
 	}()
 
 	// Enter loop to process URLs until stop signal is received
 	for {
-		var ok bool = true
-		var e error
-
 		this.logFunc(LogTrace, "Waiting for pop...\n")
 
 		select {
 		case <-this.stop:
 			this.logFunc(LogTrace, "Stop signal received.\n")
-			this.wg.Done()
 			return
 
 		default:
@@ -51,25 +48,32 @@ func (this *worker) Run() {
 			// not sure the stacked channel is such a great idea in this case...
 			u := this.pop.get()
 			this.logFunc(LogTrace, "Popped %s.\n", u.String())
-			if this.robotsData != nil {
-				// Is this URL allowed per robots.txt policy?
-				ok, e = this.robotsData.TestAgent(u.String(), this.robotUserAgent)
-				if e != nil {
-					this.logFunc(LogTrace, "RobotsData returned error %s, will deny access to url %s\n", e.Error(), u.String())
-					ok = false
-				} else if !ok {
-					this.logFunc(LogTrace, "Access denied per RobotsData policy to url %s\n", u.String())
-				}
-			} else if !isRobotsTxtUrl(u) {
-				this.logFunc(LogError, "Error no Robots.txt data for url %s\n", u.String())
-				// TODO : Go ahead and request anyway?
-			}
-
-			if ok {
+			if this.isAllowedPerRobotsPolicies(u) {
 				this.requestUrl(u)
 			}
 		}
 	}
+}
+
+func (this *worker) isAllowedPerRobotsPolicies(u *url.URL) bool {
+	if this.robotsData != nil {
+		// Is this URL allowed per robots.txt policy?
+		ok, e := this.robotsData.TestAgent(u.String(), this.robotUserAgent)
+		if e != nil {
+			this.logFunc(LogTrace, "RobotsData returned error %s, will deny access to url %s\n", e.Error(), u.String())
+			ok = false
+		} else if !ok {
+			this.logFunc(LogTrace, "Access denied per RobotsData policy to url %s\n", u.String())
+		}
+		return ok
+
+	} else if !isRobotsTxtUrl(u) {
+		this.logFunc(LogError, "Error no Robots.txt data for url %s\n", u.String())
+		// TODO : Go ahead and request anyway?
+	}
+
+	// Defaults to true (?)
+	return true
 }
 
 func (this *worker) requestUrl(u *url.URL) {
