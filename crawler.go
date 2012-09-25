@@ -58,7 +58,6 @@ type Crawler struct {
 }
 
 func New(visitor func(*http.Response, *goquery.Document) ([]*url.URL, bool), seeds ...string) *Crawler {
-
 	// Use sane defaults
 	ret := new(Crawler)
 	ret.UserAgent = DefaultUserAgent
@@ -78,11 +77,16 @@ func New(visitor func(*http.Response, *goquery.Document) ([]*url.URL, bool), see
 				ret.Logger.Printf("Error parsing seed URL %s\n", s)
 			}
 		} else {
-			parsed, _ := url.Parse(u)
-			ret.Seeds = append(ret.Seeds, parsed)
-			if sort.SearchStrings(hosts, parsed.Host) < 0 {
-				hosts = append(hosts, parsed.Host)
-				sort.Strings(hosts)
+			if parsed, e := url.Parse(u); e != nil {
+				if ret.LogLevel|LogError == LogError {
+					ret.Logger.Printf("Error parsing normalized seed URL %s\n", u)
+				}
+			} else {
+				ret.Seeds = append(ret.Seeds, parsed)
+				if sort.SearchStrings(hosts, parsed.Host) < 0 {
+					hosts = append(hosts, parsed.Host)
+					sort.Strings(hosts)
+				}
 			}
 		}
 	}
@@ -94,8 +98,6 @@ func New(visitor func(*http.Response, *goquery.Document) ([]*url.URL, bool), see
 // TODO : If run as a goroutine, can the caller modify fields on the struct? Provide IsRunning(), Stop(), Pause()?
 
 func (this *Crawler) Run() {
-	// TODO : Check options before start
-
 	// Help log function, takes care of filtering based on level
 	this.logFunc = getLogFunc(this.Logger, this.LogLevel, -1)
 
@@ -185,10 +187,12 @@ func (this *Crawler) enqueueUrls(cont *urlContainer) (cnt int) {
 			if !ok {
 				w = this.launchWorker(u)
 				// Automatically enqueue the robots.txt URL as first in line
-				// TODO : Error
-				robUrl, _ := u.Parse("/robots.txt")
-				this.logFunc(LogTrace, "Enqueue URL %s\n", robUrl.String())
-				w.pop.stack(robUrl)
+				if robUrl, e := u.Parse("/robots.txt"); e != nil {
+					this.logFunc(LogError, "Error parsing robots.txt URL from %s: %s\n", u.String(), e.Error())
+				} else {
+					this.logFunc(LogTrace, "Enqueue URL %s\n", robUrl.String())
+					w.pop.stack(robUrl)
+				}
 			}
 
 			cnt++
