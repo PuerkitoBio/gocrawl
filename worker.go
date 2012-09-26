@@ -19,7 +19,7 @@ type worker struct {
 	stop           chan bool
 	userAgent      string
 	robotUserAgent string
-	logFunc        func(LogLevel, string, ...interface{})
+	logFunc        func(LogFlags, string, ...interface{})
 	index          int
 	wg             *sync.WaitGroup
 	crawlDelay     time.Duration

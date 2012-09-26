@@ -29,10 +29,12 @@ type Options struct {
 	UrlSelector           func(target *url.URL, origin *url.URL, isVisited bool) bool
 	Fetcher               Fetcher
 	Logger                *log.Logger
-	LogLevel              LogLevel
+	LogFlags              LogFlags
 }
 
-func NewOptions(visitor func(*http.Response, *goquery.Document) ([]*url.URL, bool)) *Options {
+func NewOptions(visitor func(*http.Response, *goquery.Document) ([]*url.URL, bool),
+	urlSelector func(*url.URL, *url.URL, bool) bool) *Options {
+
 	// Use defaults except for Visitor func
 	return &Options{DefaultUserAgent,
 		DefaultRobotUserAgent,
@@ -41,7 +43,7 @@ func NewOptions(visitor func(*http.Response, *goquery.Document) ([]*url.URL, boo
 		true,
 		DefaultNormalizationFlags,
 		visitor,
-		nil,
+		urlSelector,
 		nil,
 		log.New(os.Stdout, "gocrawl ", log.LstdFlags|log.Lmicroseconds),
 		LogError}

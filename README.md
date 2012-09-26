@@ -1,6 +1,6 @@
 # gocrawl
 
-gocrawl is a polite, slim and concurrent web crawler (or *spider*).
+gocrawl is a polite, slim and concurrent web crawler.
 
 **It is currently in a very early stage of active development, unfit for any serious use. It will kill kittens. Don't. Not yet.**
 

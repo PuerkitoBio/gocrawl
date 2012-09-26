@@ -11,7 +11,7 @@ import (
 	"time"
 )
 
-// URL container returned by agents to the crawler
+// URL container returned by workers to the crawler
 type urlContainer struct {
 	sourceUrl     *url.URL
 	harvestedUrls []*url.URL
@@ -19,71 +19,78 @@ type urlContainer struct {
 
 // The crawler itself, the master of the whole process
 type Crawler struct {
-	Seeds   []*url.URL
 	Options *Options
 
 	// Internal fields
-	logFunc func(LogLevel, string, ...interface{})
+	logFunc func(LogFlags, string, ...interface{})
 	push    chan *urlContainer
 	wg      sync.WaitGroup
 
-	visited          []string
-	pushPopRefCount  int
-	visits           int
-	workers          map[string]*worker
-	initialHostCount int
+	visited         []string
+	pushPopRefCount int
+	visits          int
+	workers         map[string]*worker
 }
 
-func New(visitor func(*http.Response, *goquery.Document) ([]*url.URL, bool), seeds ...string) *Crawler {
-	// Use sane defaults
+func NewCrawlerOptions(opts *Options) *Crawler {
 	ret := new(Crawler)
-	ret.Options = NewOptions(visitor)
+	ret.Options = opts
+	return ret
+}
 
+func NewCrawler(visitor func(*http.Response, *goquery.Document) ([]*url.URL, bool),
+	urlSelector func(*url.URL, *url.URL, bool) bool) *Crawler {
+	return NewCrawlerOptions(NewOptions(visitor, urlSelector))
+}
+
+// TODO : If run as a goroutine, can the caller modify fields on the struct? Provide IsRunning(), Stop(), Pause()?
+
+func (this *Crawler) Run(seeds ...string) {
+	// Help log function, takes care of filtering based on level
+	this.logFunc = getLogFunc(this.Options.Logger, this.Options.LogFlags, -1)
+
+	parsedSeeds, hostCount := this.parseSeeds(seeds)
+	this.logFunc(LogTrace, "Parsed seeds length: %d\n", len(parsedSeeds))
+	this.logFunc(LogTrace, "Initial host count is %d\n", hostCount)
+
+	// Create the workers map and the push channel (send harvested URLs to the crawler to enqueue)
+	if this.Options.SameHostOnly {
+		this.workers = make(map[string]*worker, hostCount)
+		this.push = make(chan *urlContainer, hostCount)
+	} else {
+		this.workers = make(map[string]*worker, 10*hostCount)
+		this.push = make(chan *urlContainer, 10*hostCount)
+	}
+
+	// Start with the seeds, and loop till death
+	this.enqueueUrls(&urlContainer{nil, parsedSeeds})
+	this.collectUrls()
+}
+
+// Parse the seeds URL strings to URL objects, and return the URL objects slice,
+// along with the count of distinct hosts.
+func (this *Crawler) parseSeeds(seeds []string) ([]*url.URL, int) {
 	// Translate seeds strings to URLs, normalized right away (to allow host count)
-	hosts := make([]string, 10)
+	hosts := make([]string, 0, len(seeds))
+	parsedSeeds := make([]*url.URL, 0, len(seeds))
+
 	for _, s := range seeds {
-		if u, e := purell.NormalizeURLString(s, ret.Options.UrlNormalizationFlags); e != nil {
-			if ret.Options.LogLevel|LogError == LogError {
-				ret.Options.Logger.Printf("Error parsing seed URL %s\n", s)
-			}
+		if u, e := purell.NormalizeURLString(s, this.Options.UrlNormalizationFlags); e != nil {
+			this.logFunc(LogError, "Error parsing seed URL %s\n", s)
 		} else {
 			if parsed, e := url.Parse(u); e != nil {
-				if ret.Options.LogLevel|LogError == LogError {
-					ret.Options.Logger.Printf("Error parsing normalized seed URL %s\n", u)
-				}
+				this.logFunc(LogError, "Error parsing normalized seed URL %s\n", u)
 			} else {
-				ret.Seeds = append(ret.Seeds, parsed)
-				if sort.SearchStrings(hosts, parsed.Host) < 0 {
+				parsedSeeds = append(parsedSeeds, parsed)
+				if sort.SearchStrings(hosts, parsed.Host) >= len(hosts) {
 					hosts = append(hosts, parsed.Host)
 					sort.Strings(hosts)
 				}
 			}
 		}
 	}
-	ret.initialHostCount = len(hosts)
 
-	return ret
-}
-
-// TODO : If run as a goroutine, can the caller modify fields on the struct? Provide IsRunning(), Stop(), Pause()?
-
-func (this *Crawler) Run() {
-	// Help log function, takes care of filtering based on level
-	this.logFunc = getLogFunc(this.Options.Logger, this.Options.LogLevel, -1)
-
-	// Create the workers map and the push channel (send harvested URLs to the crawler to enqueue)
-	this.logFunc(LogTrace, "Initial host count is %d\n", this.initialHostCount)
-	if this.Options.SameHostOnly {
-		this.workers = make(map[string]*worker, this.initialHostCount)
-		this.push = make(chan *urlContainer, this.initialHostCount)
-	} else {
-		this.workers = make(map[string]*worker, 10*this.initialHostCount)
-		this.push = make(chan *urlContainer, 10*this.initialHostCount)
-	}
-
-	// Start with the seeds, and loop till death
-	this.enqueueUrls(&urlContainer{nil, this.Seeds})
-	this.collectUrls()
+	return parsedSeeds, len(hosts)
 }
 
 func (this *Crawler) launchWorker(u *url.URL) *worker {
@@ -99,7 +106,7 @@ func (this *Crawler) launchWorker(u *url.URL) *worker {
 		stop,
 		this.Options.UserAgent,
 		this.Options.RobotUserAgent,
-		getLogFunc(this.Options.Logger, this.Options.LogLevel, i),
+		getLogFunc(this.Options.Logger, this.Options.LogFlags, i),
 		i,
 		&this.wg,
 		this.Options.CrawlDelay,
@@ -138,13 +145,14 @@ func (this *Crawler) enqueueUrls(cont *urlContainer) (cnt int) {
 		if this.Options.UrlSelector != nil {
 			if forceEnqueue = this.Options.UrlSelector(u, cont.sourceUrl, isVisited); !forceEnqueue {
 				// Custom selector said NOT to use this url, so continue with next
+				this.logFunc(LogTrace, "Ignore URL on Custom Selector policy %s\n", u.String())
 				continue
 			}
 		}
 
 		// Even if custom selector said to use the URL, it still MUST be absolute, http(s)-prefixed,
 		// and comply with the same host policy if requested.
-		if len(u.Scheme) == 0 || len(u.Host) == 0 {
+		if !u.IsAbs() {
 			// Only absolute URLs are processed, so ignore
 			this.logFunc(LogTrace, "Ignore URL on Absolute URL policy %s\n", u.String())
 
