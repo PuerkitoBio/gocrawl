@@ -14,9 +14,9 @@ func TestBasic(t *testing.T) {
 		return nil, true
 	}, "http://provok.in") //, "http://www.cyberpresse.ca") //("http://www.cyberpresse.ca", "http://www.radio-canada.ca") //, "http://google.ca")
 
-	c.CrawlDelay = 2 * time.Second
-	c.MaxVisits = 5
-	c.SameHostOnly = true
+	c.Options.CrawlDelay = 2 * time.Second
+	c.Options.MaxVisits = 5
+	c.Options.SameHostOnly = true
 
 	c.Run()
 }

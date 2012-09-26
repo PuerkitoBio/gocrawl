@@ -17,13 +17,15 @@ const (
 
 func getLogFunc(logger *log.Logger, level LogLevel, workerIndex int) func(LogLevel, string, ...interface{}) {
 	return func(minLevel LogLevel, format string, vals ...interface{}) {
-		if workerIndex > 0 {
-			if level|minLevel == minLevel {
-				logger.Printf(fmt.Sprintf("Worker %d - %s", workerIndex, format), vals...)
-			}
-		} else {
-			if level|minLevel == minLevel {
-				logger.Printf(format, vals...)
+		if logger != nil {
+			if workerIndex > 0 {
+				if level|minLevel == minLevel {
+					logger.Printf(fmt.Sprintf("Worker %d - %s", workerIndex, format), vals...)
+				}
+			} else {
+				if level|minLevel == minLevel {
+					logger.Printf(format, vals...)
+				}
 			}
 		}
 	}

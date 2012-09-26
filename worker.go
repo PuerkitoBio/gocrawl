@@ -159,7 +159,3 @@ func (this *worker) processLinks(doc *goquery.Document) (result []*url.URL) {
 	}
 	return
 }
-
-func isRobotsTxtUrl(u *url.URL) bool {
-	return u.Path == "/robots.txt"
-}
