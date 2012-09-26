@@ -43,10 +43,8 @@ func NewCrawler(visitor func(*http.Response, *goquery.Document) ([]*url.URL, boo
 	return NewCrawlerOptions(NewOptions(visitor, urlSelector))
 }
 
-// TODO : If run as a goroutine, can the caller modify fields on the struct? Provide IsRunning(), Stop(), Pause()?
-
 func (this *Crawler) Run(seeds ...string) {
-	// Help log function, takes care of filtering based on level
+	// Helper log function, takes care of filtering based on level
 	this.logFunc = getLogFunc(this.Options.Logger, this.Options.LogFlags, -1)
 
 	parsedSeeds, hostCount := this.parseSeeds(seeds)
