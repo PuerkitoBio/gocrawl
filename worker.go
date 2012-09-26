@@ -24,6 +24,7 @@ type worker struct {
 	wg             *sync.WaitGroup
 	crawlDelay     time.Duration
 	robotsData     *robotstxt.RobotsData
+	fetcher        Fetcher
 }
 
 func (this *worker) Run() {
@@ -31,6 +32,11 @@ func (this *worker) Run() {
 		this.logFunc(LogTrace, "Done.\n")
 		this.wg.Done()
 	}()
+
+	// Initialize the Fetcher to default if nil
+	if this.fetcher == nil {
+		this.fetcher = new(defaultFetcher)
+	}
 
 	// Enter loop to process URLs until stop signal is received
 	for {
@@ -77,10 +83,8 @@ func (this *worker) isAllowedPerRobotsPolicies(u *url.URL) bool {
 }
 
 func (this *worker) requestUrl(u *url.URL) {
-	var fetcher defaultFetcher
-
 	// Fetch the document
-	if res, e := fetcher.Fetch(u, this.userAgent); e != nil {
+	if res, e := this.fetcher.Fetch(u, this.userAgent); e != nil {
 		this.logFunc(LogError, "Error GET for url %s: %s\n", u.String(), e.Error())
 	} else {
 		// Close the body on function end

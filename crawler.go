@@ -103,7 +103,8 @@ func (this *Crawler) launchWorker(u *url.URL) *worker {
 		i,
 		&this.wg,
 		this.Options.CrawlDelay,
-		nil}
+		nil,
+		this.Options.Fetcher}
 
 	// Increment wait group count
 	this.wg.Add(1)
