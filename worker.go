@@ -47,15 +47,23 @@ func (this *worker) Run() {
 			this.logFunc(LogTrace, "Stop signal received.\n")
 			return
 
-		default:
+		case batch := <-this.pop:
 
-			// Get the next URL to crawl
-			// TODO : This is a sync problem, because it can wait here indefinitely and will never catch the stop signal
-			// not sure the stacked channel is such a great idea in this case...
-			u := this.pop.get()
-			this.logFunc(LogTrace, "Popped %s.\n", u.String())
-			if this.isAllowedPerRobotsPolicies(u) {
-				this.requestUrl(u)
+			// Got a batch of urls to crawl, loop and check at each iteration if a stop 
+			// is received.
+			for _, u := range batch {
+				this.logFunc(LogTrace, "Popped %s.\n", u.String())
+				if this.isAllowedPerRobotsPolicies(u) {
+					this.requestUrl(u)
+				}
+
+				select {
+				case <-this.stop:
+					this.logFunc(LogTrace, "Stop signal received.\n")
+					return
+				default:
+					// Nothing, just continue...
+				}
 			}
 		}
 	}
@@ -66,7 +74,7 @@ func (this *worker) isAllowedPerRobotsPolicies(u *url.URL) bool {
 		// Is this URL allowed per robots.txt policy?
 		ok, e := this.robotsData.TestAgent(u.String(), this.robotUserAgent)
 		if e != nil {
-			this.logFunc(LogTrace, "RobotsData returned error %s, will deny access to url %s\n", e.Error(), u.String())
+			this.logFunc(LogTrace, "RobotsData returned error %s, deny access to url %s\n", e.Error(), u.String())
 			ok = false
 		} else if !ok {
 			this.logFunc(LogTrace, "Access denied per RobotsData policy to url %s\n", u.String())

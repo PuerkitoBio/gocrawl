@@ -16,7 +16,8 @@ func TestBasic(t *testing.T) {
 
 	c.Options.CrawlDelay = 2 * time.Second
 	c.Options.MaxVisits = 5
-	c.Options.SameHostOnly = true
+	c.Options.SameHostOnly = false
+	c.Options.LogLevel = LogTrace
 
 	c.Run()
 }

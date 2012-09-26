@@ -23,17 +23,3 @@ func (this popChannel) stack(u ...*url.URL) {
 		}
 	}
 }
-
-func (this popChannel) get() (u *url.URL) {
-	var ar []*url.URL
-
-	ar = <-this
-	// Impossible that the array is empty
-	u = ar[0]
-	if len(ar) > 1 {
-		// Re-stack only if more urls to process
-		this.stack(ar[1:]...)
-	}
-
-	return u
-}
