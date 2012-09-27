@@ -7,7 +7,7 @@ import (
 	"time"
 )
 
-func xTestBasic(t *testing.T) {
+func xTestBasicRealHttpRequests(t *testing.T) {
 	spy := newVisitorSpy(1*time.Millisecond, nil, true)
 	c := NewCrawler(spy.f, nil)
 

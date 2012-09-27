@@ -32,7 +32,7 @@ type Crawler struct {
 	workers         map[string]*worker
 }
 
-func NewCrawlerOptions(opts *Options) *Crawler {
+func NewCrawlerWithOptions(opts *Options) *Crawler {
 	ret := new(Crawler)
 	ret.Options = opts
 	return ret
@@ -40,7 +40,7 @@ func NewCrawlerOptions(opts *Options) *Crawler {
 
 func NewCrawler(visitor func(*http.Response, *goquery.Document) ([]*url.URL, bool),
 	urlSelector func(*url.URL, *url.URL, bool) bool) *Crawler {
-	return NewCrawlerOptions(NewOptions(visitor, urlSelector))
+	return NewCrawlerWithOptions(NewOptions(visitor, urlSelector))
 }
 
 func (this *Crawler) Run(seeds ...string) {

@@ -19,7 +19,11 @@ Likewise, there is no prioritization among the URLs to process. It assumes that 
 
 By default, uses the default net/http.Client. This default will automatically follow redirects up to 10 times (see the [net/http doc for Client struct][netclient]). It will be possible to provide a custom Fetcher interface implementation.
 
-TODO : Reuse worker once it is idle for a given duration.
+## TODOs
+
+*    Reuse workers once it is idle for a given duration.
+*    Standardize log output.
+*    More tests, especially with fetcher for controlled, static data, to check some behaviour.
 
 [goquery]: https://github.com/PuerkitoBio/goquery
 [robotstxt]: https://github.com/temoto/robotstxt.go
