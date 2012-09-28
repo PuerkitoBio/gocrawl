@@ -21,7 +21,9 @@ By default, uses the default net/http.Client. This default will automatically fo
 
 ## TODOs
 
-*    Reuse workers once it is idle for a given duration.
+*    Cleanup workers once idle for a given duration.
+*    Reset internal fields on Crawler.Run(), may be called multiple times on same instance.
+*    Manage robots.txt error scenarios (what to do?).
 *    Standardize log output.
 *    More tests, especially with fetcher for controlled, static data, to check some behaviour.
 

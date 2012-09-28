@@ -5,7 +5,6 @@ import (
 	"github.com/PuerkitoBio/purell"
 	"net/http"
 	"net/url"
-	"sort"
 	"strings"
 	"sync"
 	"time"
@@ -44,8 +43,6 @@ func NewCrawler(visitor func(*http.Response, *goquery.Document) ([]*url.URL, boo
 }
 
 func (this *Crawler) Run(seeds ...string) {
-	// TODO : Reset internal fields, this could be a second Run on a same Crawler
-
 	// Helper log function, takes care of filtering based on level
 	this.logFunc = getLogFunc(this.Options.Logger, this.Options.LogFlags, -1)
 
@@ -82,9 +79,8 @@ func (this *Crawler) parseSeeds(seeds []string) ([]*url.URL, int) {
 				this.logFunc(LogError, "Error parsing normalized seed URL %s\n", u)
 			} else {
 				parsedSeeds = append(parsedSeeds, parsed)
-				if sort.SearchStrings(hosts, parsed.Host) >= len(hosts) {
+				if indexInStrings(hosts, parsed.Host) == -1 {
 					hosts = append(hosts, parsed.Host)
-					sort.Strings(hosts)
 				}
 			}
 		}

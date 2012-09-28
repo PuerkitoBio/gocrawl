@@ -5,7 +5,6 @@ import (
 	"github.com/PuerkitoBio/goquery"
 	"net/http"
 	"net/url"
-	"sort"
 	"strings"
 	"sync/atomic"
 	"testing"
@@ -50,14 +49,12 @@ func newUrlSelectorSpy(delay time.Duration, whitelist ...string) *urlSelectorSpy
 		spy.callCounterImpl.callCount = atomic.AddInt64(&spy.callCounterImpl.callCount, 1)
 		time.Sleep(delay)
 		if len(whitelist) == 1 && whitelist[0] == "*" {
-			// Allow all
-			return true
-		} else if len(whitelist) == 1 && whitelist[0] == "?" {
-			// Return according to isVisited, basically the same as no custom URL selector
+			// Allow all, unless already visited
 			return !isVisited
 		} else if len(whitelist) > 0 {
-			if sort.Strings(whitelist); sort.SearchStrings(whitelist, target.String()) < len(whitelist) {
-				return true
+			if indexInStrings(whitelist, target.String()) >= 0 {
+				// Allow if whitelisted and not already visited
+				return !isVisited
 			}
 		}
 		return false

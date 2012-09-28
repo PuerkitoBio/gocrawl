@@ -11,3 +11,12 @@ func isRobotsTxtUrl(u *url.URL) bool {
 func getRobotsTxtUrl(u *url.URL) (*url.URL, error) {
 	return u.Parse("/robots.txt")
 }
+
+func indexInStrings(a []string, s string) int {
+	for i, v := range a {
+		if v == s {
+			return i
+		}
+	}
+	return -1
+}
