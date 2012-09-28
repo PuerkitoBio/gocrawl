@@ -69,11 +69,14 @@ func TestCustomSelectorNoUrl(t *testing.T) {
 }
 
 func TestNoSeed(t *testing.T) {
+	var b bytes.Buffer
+
 	spy := newVisitorSpy(0, nil, true)
 	c := NewCrawler(spy.f, nil)
 
 	c.Options.CrawlDelay = 1 * time.Second
 	c.Options.LogFlags = LogError | LogTrace
+	c.Options.Logger = log.New(&b, "", 0)
 	c.Run()
 	assertCallCount(spy, 0, t)
 }

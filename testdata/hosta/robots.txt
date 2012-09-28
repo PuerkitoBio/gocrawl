@@ -1,2 +1,0 @@
-User-agent: Googlebot
-Disallow: /page5.html

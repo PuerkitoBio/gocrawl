@@ -2,7 +2,7 @@ package gocrawl
 
 import (
 	"bytes"
-	//"log"
+	"log"
 	"testing"
 	"time"
 )
@@ -16,7 +16,7 @@ func runFileFetcherWithOptions(opts *Options, urlSel []string, seeds []string) (
 	opts.UrlVisitor = spyv.f
 	opts.UrlSelector = spyu.f
 	opts.Fetcher = newFileFetcher("./testdata/")
-	//opts.Logger = log.New(b, "", 0)
+	opts.Logger = log.New(b, "", 0)
 	c := NewCrawlerWithOptions(opts)
 
 	c.Run(seeds...)
