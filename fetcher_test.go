@@ -17,11 +17,14 @@ func NewFileFetcher(basePath string) *fileFetcher {
 
 func (this *fileFetcher) Fetch(u *url.URL, userAgent string) (*http.Response, error) {
 	var res *http.Response = new(http.Response)
-	var req *http.Request = new(http.Request)
+	var req *http.Request
+	var e error
+
+	if req, e = http.NewRequest("GET", u.String(), nil); e != nil {
+		panic(e)
+	}
 
 	// Prepare the pseudo-request
-	req.Method = "GET"
-	req.URL = u
 	req.Header.Add("User-Agent", userAgent)
 
 	// Open the file specified as path in u, relative to testdata/[host]/

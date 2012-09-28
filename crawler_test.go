@@ -78,4 +78,22 @@ func TestNoSeed(t *testing.T) {
 	assertCallCount(spy, 0, t)
 }
 
+func TestFileFetcherAllSameHost(t *testing.T) {
+	var b bytes.Buffer
+
+	spyv := newVisitorSpy(0, nil, true)
+	spyu := newUrlSelectorSpy(0, "?") // Select according to isVisited
+	c := NewCrawler(spyv.f, spyu.f)
+
+	c.Options.CrawlDelay = 1 * time.Second
+	c.Options.LogFlags = LogError | LogTrace
+	c.Options.Logger = log.New(&b, "", 0)
+	c.Options.Fetcher = NewFileFetcher("./testdata/")
+
+	c.Run("http://hosta/page1.html", "http://hosta/page4.html")
+
+	assertCallCount(spyv, 5, t)
+	assertCallCount(spyu, 13, t)
+}
+
 // TODO : Use a Fetcher with static data for tests

@@ -52,6 +52,9 @@ func newUrlSelectorSpy(delay time.Duration, whitelist ...string) *urlSelectorSpy
 		if len(whitelist) == 1 && whitelist[0] == "*" {
 			// Allow all
 			return true
+		} else if len(whitelist) == 1 && whitelist[0] == "?" {
+			// Return according to isVisited, basically the same as no custom URL selector
+			return !isVisited
 		} else if len(whitelist) > 0 {
 			if sort.Strings(whitelist); sort.SearchStrings(whitelist, target.String()) < len(whitelist) {
 				return true
