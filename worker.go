@@ -94,7 +94,11 @@ func (this *worker) requestUrl(u *url.URL) {
 	// Fetch the document
 	if res, e := this.fetcher.Fetch(u, this.userAgent); e != nil {
 		this.logFunc(LogError, "Error GET for url %s: %s\n", u.String(), e.Error())
+		this.notifyURLProcessed(u, nil)
+
 	} else {
+		var harvested []*url.URL
+
 		// Close the body on function end
 		defer res.Body.Close()
 
@@ -117,19 +121,30 @@ func (this *worker) requestUrl(u *url.URL) {
 			// Normal path
 			if res.StatusCode >= 200 && res.StatusCode < 300 {
 				// Success, visit the URL
-				this.visitUrl(res)
+				harvested = this.visitUrl(res)
 			} else {
 				// Error based on status code received
 				this.logFunc(LogError, "Error returned from server for url %s: %s\n", u.String(), res.Status)
 			}
 		}
+		this.notifyURLProcessed(u, harvested)
 
 		// Wait for crawl delay
 		<-wait
 	}
 }
 
-func (this *worker) visitUrl(res *http.Response) {
+func (this *worker) notifyURLProcessed(u *url.URL, harvested []*url.URL) {
+	// Do NOT notify for robots.txt URLs, this is an under-the-cover request,
+	// not an actual URL enqueued for crawling.
+	if !isRobotsTxtUrl(u) {
+		// Push harvested urls back to crawler, even if empty (uses the channel communication
+		// to decrement reference count of pending URLs)
+		this.push <- &urlContainer{u, harvested}
+	}
+}
+
+func (this *worker) visitUrl(res *http.Response) []*url.URL {
 	var doc *goquery.Document
 	var harvested []*url.URL
 	var doLinks bool
@@ -148,9 +163,7 @@ func (this *worker) visitUrl(res *http.Response) {
 		harvested = this.processLinks(doc)
 	}
 
-	// Push harvested urls back to crawler, even if empty (uses the channel communication
-	// to decrement reference count of pending URLs)
-	this.push <- &urlContainer{res.Request.URL, harvested}
+	return harvested
 }
 
 func (this *worker) processLinks(doc *goquery.Document) (result []*url.URL) {

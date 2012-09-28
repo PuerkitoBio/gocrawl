@@ -11,7 +11,7 @@ type fileFetcher struct {
 	basePath string
 }
 
-func NewFileFetcher(basePath string) *fileFetcher {
+func newFileFetcher(basePath string) *fileFetcher {
 	return &fileFetcher{basePath}
 }
 
