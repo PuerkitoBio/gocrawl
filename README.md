@@ -11,12 +11,6 @@ gocrawl is a polite, slim and concurrent web crawler written in Go.
 *    Configurable logging using the builtin Go logger
 *    Open, customizable design by providing hooks into the execution logic
 
-gocrawl can be described as a minimalist web crawler, providing the basic engine upon which to build a full-fledged indexing machine with caching, persistence and staleness detection logic, or to use as is for quick and easy crawling. For gocrawl itself does not attempt to detect staleness of a page, nor does it implement a caching mechanism. If an URL is enqueued to be processed, it *will* make a request to fetch it. And there is no prioritization among the URLs to process, it assumes that all enqueued URLs must be visited at some point, and that the order in which they are is unimportant.
-
-However, it does provide a hook (the URLSelector function) where some analysis can take place to alter its behaviour (based on the last visited date of the URL, saved in a persistent store, for example). Instead of trying to do everything and impose a way to do it, it offers ways to manipulate and adapt it to anyone's needs.
-
-By default, gocrawl uses the default net/http.Client to fetch the pages. This default will automatically follow redirects up to 10 times (see the [net/http doc for Client struct][netclient]). It is possible to provide a custom Fetcher interface implementation using the Crawler Options.
-
 ## Installation and dependencies
 
 gocrawl depends on the following userland libraries:
@@ -31,6 +25,60 @@ Once this is done, gocrawl may be installed as usual:
 
 `go get github.com/PuerkitoBio/gocrawl`
 
+## API
+
+gocrawl can be described as a minimalist web crawler (hence the "slim" tag, at ~500 sloc), providing the basic engine upon which to build a full-fledged indexing machine with caching, persistence and staleness detection logic, or to use as is for quick and easy crawling. For gocrawl itself does not attempt to detect staleness of a page, nor does it implement a caching mechanism. If an URL is enqueued to be processed, it *will* make a request to fetch it (provided it is allowed by robots.txt - hence the "polite" tag). And there is no prioritization among the URLs to process, it assumes that all enqueued URLs must be visited at some point, and that the order in which they are is unimportant.
+
+However, it does provide plenty of [hooks and customizations](#hc). Instead of trying to do everything and impose a way to do it, it offers ways to manipulate and adapt it to anyone's needs.
+
+As usual, the complete godoc reference can be found [here][godoc].
+
+### Crawler
+
+The Crawler type controls the whole execution. It spawns worker goroutines and manages the URL queue. There are two helper constructors:
+
+*    **NewCrawler(visitor, urlSelector)** : Creates a crawler with the specified visitor function and URL selector function (which may be `nil`).
+*    **NewCrawlerWithOptions(options)** : Creates a crawler with a pre-initialized `*Options` instance.
+
+The one and only public function is `Run(seeds ...string)` which take a variadic string argument, the base URLs used to start crawling. It ends when there are no more URLs waiting to be visited, or when the `Options.MaxVisit` number is reached.
+
+### Options
+
+The Options type is detailed in the next section, and it offers a single constructor, `NewOptions(visitor, urlSelector)`, which returns an initialized options object with defaults and the specified visitor function and URL selector function (which may be `nil`).
+
+### Hooks and customizations
+<a name="hc" />
+
+The `Options` type provides the hooks and customizations offered by gocrawl. All but the `URLVisitor` are optional and have working defaults.
+
+*    **UserAgent** : The user-agent string used to fetch the pages. Defaults to the Firefox 15 on Windows user-agent string.
+
+*    **RobotUserAgent** : The robot's user-agent string used to check for robots.txt permission to fetch an URL. Defaults to `Googlebot (gocrawl vM.m)` where `M.m` is the major and minor version of gocrawl. Because of the way the [robots exclusion protocol][robprot] works ([full specification as interpreted by Google here][robspec]), the user-agent string should *start* with a well-known robot name so that it (most likely) behaves as intended by the site owner.
+
+*    **MaxVisits** : The maximum number of pages *visited* before stopping the crawl. Probably more useful for development purposes. Note that the Crawler will send its stop signal once this number of visits is reached, but workers may be in the process of visiting other pages, so when the crawling stops, the number of pages visited will be *at least* MaxVisits, possibly more (worst case is `MaxVisits + number of active workers`). Defaults to zero, no maximum.
+
+*    **CrawlDelay** : The time to wait between each request to the same host. The delay starts as soon as the response is received from the host. This is a `time.Duration` type, so it can be specified with `5 * time.Second` for example (which is the default value, 5 seconds).
+
+*    **SameHostOnly** : A quick and easy configuration to limit the selected URLs only to those links targeting the same host, which is `true` by default.
+
+*    **URLNormalizationFlags** : The flags to apply when normalizing the URL using the [purell][] library. The URLs found by crawling a page are normalized before being submitted to the URL selection criteria (to determine if they should be visited or not). Defaults to the most aggressive normalization allowed by purell, `purell.FlagsAllGreedy`.
+
+*    **URLVisitor** : The function to be called when visiting a URL. It receives a `*http.Response` response object, along with a ready-to-use `*goquery.Document` object (or `nil` if the response body could not be parsed). It returns a slice of `*url.URL` links to enqueue, and a `bool` flag indicating if gocrawl should find the links himself. When this flag is `true`, the slice of URLs is ignored and gocrawl searches the goquery document for links to enqueue. When `false`, the returned slice of URLs is enqueued, if any. Note that this function is called from a worker goroutine. If no visitor function is provided, the crawling process is mostly useless, no additional URLs will be enqueued (gocrawl will not process links found in the document), so *this option should be considered mandatory*.
+
+*    **URLSelector** : The function to be called when deciding if a URL should be enqueued for visiting. It receives the target `*url.URL` link, the source `*url.URL` link (where this URL was found, `nil` for the seeds), and a `bool` is visited flag, indicating if this URL has already been visited in this crawling execution. It returns a `bool` flag ordering gocrawl to visit (`true`) or ignore (`false`) the URL. However, even if the function returns true, the URL must still comply to these rules:
+
+        1.    It must be an absolute URL
+        2.    It must have a `http/https` scheme
+        3.    It must have the same host if the `SameHostOnly` flag is set
+
+    *The selector is optional*, if none is provided, the 3 rules above are applied, and the link is visited only once (if the is visited flag is true, it is not visited again).
+
+*    **Fetcher** : The Fetcher interface defines only one method, `Fetch(u *url.URL, userAgent string) (*http.Response, error)`. If no custom fetcher is specified, a default fetcher is used which uses the default `net/http.Client` to fetch the pages. It will automatically follow redirects up to 10 times (see the [net/http doc for Client struct][netclient]).
+
+*    **Logger** : An instance of Go's built-in `*log.Logger` type. It can be created by calling `log.New()`. By default, a logger that prints to the standard output is used.
+
+*    **LogFlags** : The level of verbosity for the logger. Defaults to errors only (`LogError`).
+
 ## TODOs
 
 *    Cleanup workers once idle for a given duration.
@@ -44,3 +92,6 @@ Once this is done, gocrawl may be installed as usual:
 [netclient]: http://golang.org/pkg/net/http/#Client
 [purell]: https://github.com/PuerkitoBio/purell
 [exp]: http://code.google.com/p/go-wiki/wiki/InstallingExp
+[robprot]: http://www.robotstxt.org/robotstxt.html
+[robspec]: https://developers.google.com/webmasters/control-crawl-index/docs/robots_txt
+[godoc]: http://go.pkgdoc.org/github.com/puerkitobio/gocrawl

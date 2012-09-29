@@ -12,6 +12,10 @@ import (
 	"time"
 )
 
+const (
+	DefaultTestCrawlDelay = 100 * time.Millisecond
+)
+
 type callCounter interface {
 	getCallCount() int64
 }

@@ -13,6 +13,7 @@ import (
 // URL container returned by workers to the crawler
 type urlContainer struct {
 	sourceUrl     *url.URL
+	visited       bool
 	harvestedUrls []*url.URL
 }
 
@@ -61,7 +62,7 @@ func (this *Crawler) Run(seeds ...string) {
 	}
 
 	// Start with the seeds, and loop till death
-	this.enqueueUrls(&urlContainer{nil, parsedSeeds})
+	this.enqueueUrls(&urlContainer{nil, false, parsedSeeds})
 	this.collectUrls()
 }
 
@@ -114,7 +115,7 @@ func (this *Crawler) launchWorker(u *url.URL) *worker {
 	this.wg.Add(1)
 
 	// Launch worker
-	go w.Run()
+	go w.run()
 	this.logFunc(LogTrace, "Worker %d launched.\n", i)
 	this.workers[u.Host] = w
 
@@ -211,11 +212,13 @@ func (this *Crawler) collectUrls() {
 		select {
 		case cont := <-this.push:
 			// Received a URL container to enqueue
-			this.visits++
-			if this.Options.MaxVisits > 0 && this.visits >= this.Options.MaxVisits {
-				// Limit reached, request workers to stop
-				stopAll()
-				return
+			if cont.visited {
+				this.visits++
+				if this.Options.MaxVisits > 0 && this.visits >= this.Options.MaxVisits {
+					// Limit reached, request workers to stop
+					stopAll()
+					return
+				}
 			}
 			this.enqueueUrls(cont)
 			this.pushPopRefCount--

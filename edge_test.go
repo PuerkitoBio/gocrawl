@@ -11,7 +11,7 @@ func xTestBasicRealHttpRequests(t *testing.T) {
 	spy := newVisitorSpy(1*time.Millisecond, nil, true)
 	c := NewCrawler(spy.f, nil)
 
-	c.Options.CrawlDelay = 1 * time.Second
+	c.Options.CrawlDelay = DefaultCrawlDelay
 	c.Options.MaxVisits = 5
 	c.Options.SameHostOnly = false
 	c.Options.LogFlags = LogError | LogTrace
@@ -25,7 +25,7 @@ func TestInvalidSeed(t *testing.T) {
 	spy := newVisitorSpy(1*time.Millisecond, nil, true)
 	c := NewCrawler(spy.f, nil)
 
-	c.Options.CrawlDelay = 1 * time.Second
+	c.Options.CrawlDelay = DefaultCrawlDelay
 	c.Options.LogFlags = LogError | LogTrace
 	c.Options.Logger = log.New(&b, "", 0)
 
@@ -40,7 +40,7 @@ func TestHostCount(t *testing.T) {
 	spy := newVisitorSpy(1*time.Millisecond, nil, true)
 	c := NewCrawler(spy.f, nil)
 
-	c.Options.CrawlDelay = 1 * time.Second
+	c.Options.CrawlDelay = DefaultTestCrawlDelay
 	c.Options.LogFlags = LogError | LogTrace
 	c.Options.Logger = log.New(&b, "", 0)
 
@@ -58,7 +58,7 @@ func TestCustomSelectorNoUrl(t *testing.T) {
 	uspy := newUrlSelectorSpy(0)
 	c := NewCrawler(vspy.f, uspy.f)
 
-	c.Options.CrawlDelay = 1 * time.Second
+	c.Options.CrawlDelay = DefaultTestCrawlDelay
 	c.Options.LogFlags = LogError | LogTrace
 	c.Options.Logger = log.New(&b, "", 0)
 	c.Run("http://test1", "http://test2")
@@ -74,9 +74,23 @@ func TestNoSeed(t *testing.T) {
 	spy := newVisitorSpy(0, nil, true)
 	c := NewCrawler(spy.f, nil)
 
-	c.Options.CrawlDelay = 1 * time.Second
+	c.Options.CrawlDelay = DefaultTestCrawlDelay
 	c.Options.LogFlags = LogError | LogTrace
 	c.Options.Logger = log.New(&b, "", 0)
 	c.Run()
 	assertCallCount(spy, 0, t)
+}
+
+func TestNoVisitorFunc(t *testing.T) {
+	var b bytes.Buffer
+
+	opts := NewOptions(nil, nil)
+	opts.CrawlDelay = DefaultTestCrawlDelay
+	opts.LogFlags = LogError | LogTrace
+	opts.Fetcher = newFileFetcher("./testdata/")
+	opts.Logger = log.New(&b, "", 0)
+
+	c := NewCrawlerWithOptions(opts)
+	c.Run("http://hosta/page1.html")
+	assertIsInLog(b, "No visitor function, url not visited http://hosta/page1.html", t)
 }

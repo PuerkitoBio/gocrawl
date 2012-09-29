@@ -2,13 +2,12 @@ package gocrawl
 
 import (
 	"testing"
-	"time"
 )
 
 func TestRobotDenyAll(t *testing.T) {
 	opts := NewOptions(nil, nil)
 	opts.SameHostOnly = false
-	opts.CrawlDelay = 1 * time.Second
+	opts.CrawlDelay = DefaultTestCrawlDelay
 	opts.LogFlags = LogError | LogTrace
 	spyv, spyu, _ := runFileFetcherWithOptions(opts, []string{"*"}, []string{"http://robota/page1.html"})
 
@@ -19,7 +18,7 @@ func TestRobotDenyAll(t *testing.T) {
 func TestRobotPartialDenyGooglebot(t *testing.T) {
 	opts := NewOptions(nil, nil)
 	opts.SameHostOnly = false
-	opts.CrawlDelay = 1 * time.Second
+	opts.CrawlDelay = DefaultTestCrawlDelay
 	opts.LogFlags = LogError | LogTrace
 	spyv, spyu, _ := runFileFetcherWithOptions(opts, []string{"*"}, []string{"http://robotb/page1.html"})
 
@@ -30,7 +29,7 @@ func TestRobotPartialDenyGooglebot(t *testing.T) {
 func TestRobotDenyOtherBot(t *testing.T) {
 	opts := NewOptions(nil, nil)
 	opts.SameHostOnly = false
-	opts.CrawlDelay = 1 * time.Second
+	opts.CrawlDelay = DefaultTestCrawlDelay
 	opts.LogFlags = LogError | LogTrace
 	opts.RobotUserAgent = "NotGoogleBot"
 	spyv, spyu, _ := runFileFetcherWithOptions(opts, []string{"*"}, []string{"http://robotb/page1.html"})

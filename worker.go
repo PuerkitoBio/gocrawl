@@ -27,7 +27,7 @@ type worker struct {
 	fetcher        Fetcher
 }
 
-func (this *worker) Run() {
+func (this *worker) run() {
 	defer func() {
 		this.logFunc(LogTrace, "Done.\n")
 		this.wg.Done()
@@ -57,7 +57,7 @@ func (this *worker) Run() {
 					this.requestUrl(u)
 				} else {
 					// Must still notify Crawler that this URL was processed, although not visited
-					this.notifyURLProcessed(u, nil)
+					this.notifyURLProcessed(u, false, nil)
 				}
 
 				select {
@@ -100,10 +100,11 @@ func (this *worker) requestUrl(u *url.URL) {
 	// Fetch the document
 	if res, e := this.fetcher.Fetch(u, this.userAgent); e != nil {
 		this.logFunc(LogError, "Error GET for url %s: %s\n", u.String(), e.Error())
-		this.notifyURLProcessed(u, nil)
+		this.notifyURLProcessed(u, false, nil)
 
 	} else {
 		var harvested []*url.URL
+		var visited bool
 
 		// Close the body on function end
 		defer res.Body.Close()
@@ -129,25 +130,26 @@ func (this *worker) requestUrl(u *url.URL) {
 			if res.StatusCode >= 200 && res.StatusCode < 300 {
 				// Success, visit the URL
 				harvested = this.visitUrl(res)
+				visited = true
 			} else {
 				// Error based on status code received
 				this.logFunc(LogError, "Error returned from server for url %s: %s\n", u.String(), res.Status)
 			}
 		}
-		this.notifyURLProcessed(u, harvested)
+		this.notifyURLProcessed(u, visited, harvested)
 
 		// Wait for crawl delay
 		<-wait
 	}
 }
 
-func (this *worker) notifyURLProcessed(u *url.URL, harvested []*url.URL) {
+func (this *worker) notifyURLProcessed(u *url.URL, visited bool, harvested []*url.URL) {
 	// Do NOT notify for robots.txt URLs, this is an under-the-cover request,
 	// not an actual URL enqueued for crawling.
 	if !isRobotsTxtUrl(u) {
 		// Push harvested urls back to crawler, even if empty (uses the channel communication
 		// to decrement reference count of pending URLs)
-		this.push <- &urlContainer{u, harvested}
+		this.push <- &urlContainer{u, visited, harvested}
 	}
 }
 
@@ -165,9 +167,13 @@ func (this *worker) visitUrl(res *http.Response) []*url.URL {
 	}
 
 	// Visit the document (with nil goquery doc if failed to load)
-	if harvested, doLinks = this.visitor(res, doc); doLinks && doc != nil {
-		// Links were not processed by the visitor, so process links
-		harvested = this.processLinks(doc)
+	if this.visitor != nil {
+		if harvested, doLinks = this.visitor(res, doc); doLinks && doc != nil {
+			// Links were not processed by the visitor, so process links
+			harvested = this.processLinks(doc)
+		}
+	} else {
+		this.logFunc(LogTrace, "No visitor function, url not visited %s\n", res.Request.URL.String())
 	}
 
 	return harvested
