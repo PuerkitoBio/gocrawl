@@ -71,9 +71,9 @@ The `Options` type provides the hooks and customizations offered by gocrawl. All
         2.    It must have a `http/https` scheme
         3.    It must have the same host if the `SameHostOnly` flag is set
 
-    *The selector is optional*, if none is provided, the 3 rules above are applied, and the link is visited only once (if the is visited flag is true, it is not visited again).
+    *The selector is optional*, if none is provided, the 3 rules above are applied, and the link is visited only once (if the is visited flag is true, it is not visited again). The selector function is called from the Crawler, which means it can *potentially* block all workers if it is too slow (see the `push` channel in the code - it is a buffered channel, but if the selector is *very* slow it could still be a problem). Make sure this function is fast if you care about performance (i.e. regular expressions pre-compiled and cached, DB caching outside the function, etc.).
 
-*    **Fetcher** : The Fetcher interface defines only one method, `Fetch(u *url.URL, userAgent string) (*http.Response, error)`. If no custom fetcher is specified, a default fetcher is used which uses the default `net/http.Client` to fetch the pages. It will automatically follow redirects up to 10 times (see the [net/http doc for Client struct][netclient]).
+*    **Fetcher** : The Fetcher interface defines only one method, `Fetch(u *url.URL, userAgent string) (*http.Response, error)`. If no custom fetcher is specified, a default fetcher is used which uses the default `http.Client` to fetch the pages. It will automatically follow redirects up to 10 times (see the [net/http doc for Client struct][netclient]).
 
 *    **Logger** : An instance of Go's built-in `*log.Logger` type. It can be created by calling `log.New()`. By default, a logger that prints to the standard output is used.
 
