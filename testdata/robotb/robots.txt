@@ -1,0 +1,2 @@
+User-agent: Googlebot
+Disallow: /page2.html

@@ -69,8 +69,8 @@ func runFileFetcherWithOptions(opts *Options, urlSel []string, seeds []string) (
 	spyv = newVisitorSpy(0, nil, true)
 	spyu = newUrlSelectorSpy(0, urlSel...)
 
-	opts.UrlVisitor = spyv.f
-	opts.UrlSelector = spyu.f
+	opts.URLVisitor = spyv.f
+	opts.URLSelector = spyu.f
 	opts.Fetcher = newFileFetcher("./testdata/")
 	opts.Logger = log.New(b, "", 0)
 	c := NewCrawlerWithOptions(opts)

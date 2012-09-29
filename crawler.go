@@ -49,6 +49,7 @@ func (this *Crawler) Run(seeds ...string) {
 	parsedSeeds, hostCount := this.parseSeeds(seeds)
 	this.logFunc(LogTrace, "Parsed seeds length: %d\n", len(parsedSeeds))
 	this.logFunc(LogTrace, "Initial host count is %d\n", hostCount)
+	this.logFunc(LogTrace, "Robot user-agent is %s\n", this.Options.RobotUserAgent)
 
 	// Create the workers map and the push channel (send harvested URLs to the crawler to enqueue)
 	if this.Options.SameHostOnly {
@@ -72,7 +73,7 @@ func (this *Crawler) parseSeeds(seeds []string) ([]*url.URL, int) {
 	parsedSeeds := make([]*url.URL, 0, len(seeds))
 
 	for _, s := range seeds {
-		if u, e := purell.NormalizeURLString(s, this.Options.UrlNormalizationFlags); e != nil {
+		if u, e := purell.NormalizeURLString(s, this.Options.URLNormalizationFlags); e != nil {
 			this.logFunc(LogError, "Error parsing seed URL %s\n", s)
 		} else {
 			if parsed, e := url.Parse(u); e != nil {
@@ -96,7 +97,7 @@ func (this *Crawler) launchWorker(u *url.URL) *worker {
 	stop := make(chan bool, 1)
 
 	// Create the worker
-	w := &worker{this.Options.UrlVisitor,
+	w := &worker{this.Options.URLVisitor,
 		this.push,
 		pop,
 		stop,
@@ -138,8 +139,8 @@ func (this *Crawler) enqueueUrls(cont *urlContainer) (cnt int) {
 		isVisited = this.isVisited(u)
 
 		// If a selector callback is specified, use this to filter URL
-		if this.Options.UrlSelector != nil {
-			if forceEnqueue = this.Options.UrlSelector(u, cont.sourceUrl, isVisited); !forceEnqueue {
+		if this.Options.URLSelector != nil {
+			if forceEnqueue = this.Options.URLSelector(u, cont.sourceUrl, isVisited); !forceEnqueue {
 				// Custom selector said NOT to use this url, so continue with next
 				this.logFunc(LogTrace, "Ignore URL on Custom Selector policy %s\n", u.String())
 				continue

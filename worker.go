@@ -88,10 +88,11 @@ func (this *worker) isAllowedPerRobotsPolicies(u *url.URL) bool {
 
 	} else if !isRobotsTxtUrl(u) {
 		this.logFunc(LogError, "Error no Robots.txt data for url %s\n", u.String())
-		// TODO : Go ahead and request anyway?
+		// TODO: No robots.txt means access to all, but would give a 404 on the request and
+		// there would still be robots.txt data. This case is when there is NO data,
+		// which is highly unlikely and means something has gone wrong.
 	}
 
-	// Defaults to true (?)
 	return true
 }
 
