@@ -77,7 +77,7 @@ The `Options` type provides the hooks and customizations offered by gocrawl. All
 
 *    **Logger** : An instance of Go's built-in `*log.Logger` type. It can be created by calling `log.New()`. By default, a logger that prints to the standard output is used.
 
-*    **LogFlags** : The level of verbosity for the logger. Defaults to errors only (`LogError`).
+*    **LogFlags** : The level of verbosity for the logger. Defaults to errors only (`LogError`). Can be a set of flags (i.e. `LogError | LogTrace`).
 
 ## TODOs
 
