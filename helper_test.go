@@ -3,6 +3,7 @@ package gocrawl
 import (
 	"bytes"
 	"github.com/PuerkitoBio/goquery"
+	"log"
 	"net/http"
 	"net/url"
 	"strings"
@@ -60,6 +61,22 @@ func newUrlSelectorSpy(delay time.Duration, whitelist ...string) *urlSelectorSpy
 		return false
 	}
 	return spy
+}
+
+func runFileFetcherWithOptions(opts *Options, urlSel []string, seeds []string) (spyv *visitorSpy, spyu *urlSelectorSpy, b *bytes.Buffer) {
+	// Initialize log, spies and crawler
+	b = new(bytes.Buffer)
+	spyv = newVisitorSpy(0, nil, true)
+	spyu = newUrlSelectorSpy(0, urlSel...)
+
+	opts.UrlVisitor = spyv.f
+	opts.UrlSelector = spyu.f
+	opts.Fetcher = newFileFetcher("./testdata/")
+	opts.Logger = log.New(b, "", 0)
+	c := NewCrawlerWithOptions(opts)
+
+	c.Run(seeds...)
+	return spyv, spyu, b
 }
 
 func assertIsInLog(buf bytes.Buffer, s string, t *testing.T) {

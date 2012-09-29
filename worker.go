@@ -55,6 +55,9 @@ func (this *worker) Run() {
 				this.logFunc(LogTrace, "Popped %s.\n", u.String())
 				if this.isAllowedPerRobotsPolicies(u) {
 					this.requestUrl(u)
+				} else {
+					// Must still notify Crawler that this URL was processed, although not visited
+					this.notifyURLProcessed(u, nil)
 				}
 
 				select {
@@ -72,12 +75,14 @@ func (this *worker) Run() {
 func (this *worker) isAllowedPerRobotsPolicies(u *url.URL) bool {
 	if this.robotsData != nil {
 		// Is this URL allowed per robots.txt policy?
-		ok, e := this.robotsData.TestAgent(u.String(), this.robotUserAgent)
+		ok, e := this.robotsData.TestAgent(u.Path, this.robotUserAgent)
 		if e != nil {
 			this.logFunc(LogTrace, "RobotsData returned error %s, deny access to url %s\n", e.Error(), u.String())
 			ok = false
 		} else if !ok {
 			this.logFunc(LogTrace, "Access denied per RobotsData policy to url %s\n", u.String())
+		} else {
+			this.logFunc(LogTrace, "Access allowed per RobotsData policy to url %s\n", u.String())
 		}
 		return ok
 
@@ -115,6 +120,7 @@ func (this *worker) requestUrl(u *url.URL) {
 				this.logFunc(LogError, "Error parsing robots.txt for host %s: %s\n", u.Host, e.Error())
 				// TODO : Can't really continue, panic?
 			} else {
+				this.logFunc(LogTrace, "Caching robots.txt data for host %s\n", u.Host)
 				this.robotsData = data
 			}
 		} else {
