@@ -67,9 +67,9 @@ The `Options` type provides the hooks and customizations offered by gocrawl. All
 
 *    **URLSelector** : The function to be called when deciding if a URL should be enqueued for visiting. It receives the target `*url.URL` link, the source `*url.URL` link (where this URL was found, `nil` for the seeds), and a `bool` is visited flag, indicating if this URL has already been visited in this crawling execution. It returns a `bool` flag ordering gocrawl to visit (`true`) or ignore (`false`) the URL. However, even if the function returns true, the URL must still comply to these rules:
 
-    1. It must be an absolute URL
-    2. It must have a `http/https` scheme
-    3. It must have the same host if the `SameHostOnly` flag is set
+    1.   It must be an absolute URL 
+    2.   It must have a `http/https` scheme
+    3.   It must have the same host if the `SameHostOnly` flag is set
 
     *The selector is optional*, if none is provided, the 3 rules above are applied, and the link is visited only once (if the is visited flag is true, it is not visited again). The selector function is called from the Crawler, which means it can *potentially* block all workers if it is too slow (see the `push` channel in the code - it is a buffered channel, but if the selector is *very* slow it could still be a problem). Make sure this function is fast if you care about performance (i.e. regular expressions pre-compiled and cached, DB caching outside the function, etc.).
 
