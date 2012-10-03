@@ -4,7 +4,6 @@ import (
 	"exp/html"
 	"github.com/PuerkitoBio/goquery"
 	"github.com/temoto/robotstxt.go"
-	"io/ioutil"
 	"net/http"
 	"net/url"
 	"strings"
@@ -23,7 +22,7 @@ type worker struct {
 	index          int
 	wg             *sync.WaitGroup
 	crawlDelay     time.Duration
-	robotsData     *robotstxt.RobotsData
+	robotsGroup    *robotstxt.Group
 	fetcher        Fetcher
 }
 
@@ -73,13 +72,10 @@ func (this *worker) run() {
 }
 
 func (this *worker) isAllowedPerRobotsPolicies(u *url.URL) bool {
-	if this.robotsData != nil {
+	if this.robotsGroup != nil {
 		// Is this URL allowed per robots.txt policy?
-		ok, e := this.robotsData.TestAgent(u.Path, this.robotUserAgent)
-		if e != nil {
-			this.logFunc(LogTrace, "RobotsData returned error %s, deny access to url %s\n", e.Error(), u.String())
-			ok = false
-		} else if !ok {
+		ok := this.robotsGroup.Test(u.Path)
+		if !ok {
 			this.logFunc(LogTrace, "Access denied per RobotsData policy to url %s\n", u.String())
 		} else {
 			this.logFunc(LogTrace, "Access allowed per RobotsData policy to url %s\n", u.String())
@@ -114,16 +110,12 @@ func (this *worker) requestUrl(u *url.URL) {
 
 		// Special case if this is the robots.txt
 		if isRobotsTxtUrl(u) {
-			if body, e := ioutil.ReadAll(res.Body); e != nil {
-				this.logFunc(LogError, "Error reading robots.txt body for host %s: %s\n", u.Host, e.Error())
-				// TODO : Can't really continue, panic?
-
-			} else if data, e := robotstxt.FromResponseBytes(res.StatusCode, body, false); e != nil {
+			if data, e := robotstxt.FromResponse(res); e != nil {
 				this.logFunc(LogError, "Error parsing robots.txt for host %s: %s\n", u.Host, e.Error())
 				// TODO : Can't really continue, panic?
 			} else {
-				this.logFunc(LogTrace, "Caching robots.txt data for host %s\n", u.Host)
-				this.robotsData = data
+				this.logFunc(LogTrace, "Caching robots.txt group for host %s\n", u.Host)
+				this.robotsGroup = data.FindGroup(this.robotUserAgent)
 			}
 		} else {
 			// Normal path
