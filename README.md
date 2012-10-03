@@ -83,7 +83,7 @@ The `Options` type provides the hooks and customizations offered by gocrawl. All
 
 *    Cleanup workers once idle for a given duration.
 *    Reset internal fields on Crawler.Run(), may be called multiple times on same instance.
-*    Manage robots.txt error scenarios, prepare and send pull request to robotstxt.go (follow google's robots.txt specs).
+*    Manage robots.txt error scenarios.
 *    Standardize log output.
 *    Doc, examples.
 
