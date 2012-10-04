@@ -37,3 +37,31 @@ func TestSelectOnlyPage1s(t *testing.T) {
 	assertCallCount(spyv, 3, t)
 	assertCallCount(spyu, 11, t)
 }
+
+func TestRunTwiceSameInstance(t *testing.T) {
+	spyv := newVisitorSpy(0, nil, true)
+	spyu := newUrlSelectorSpy(0, "*")
+
+	opts := NewOptions(nil, nil)
+	opts.SameHostOnly = true
+	opts.CrawlDelay = DefaultTestCrawlDelay
+	opts.URLVisitor = spyv.f
+	opts.URLSelector = spyu.f
+	opts.LogFlags = LogNone
+	opts.Fetcher = newFileFetcher("./testdata/")
+	c := NewCrawlerWithOptions(opts)
+	c.Run("http://hosta/page1.html", "http://hosta/page4.html")
+
+	assertCallCount(spyv, 5, t)
+	assertCallCount(spyu, 13, t)
+
+	spyv = newVisitorSpy(0, nil, true)
+	spyu = newUrlSelectorSpy(0, "http://hosta/page1.html", "http://hostb/page1.html", "http://hostc/page1.html", "http://hostd/page1.html")
+	opts.URLVisitor = spyv.f
+	opts.URLSelector = spyu.f
+	opts.SameHostOnly = false
+	c.Run("http://hosta/page1.html", "http://hosta/page4.html", "http://hostb/pageunlinked.html")
+
+	assertCallCount(spyv, 3, t)
+	assertCallCount(spyu, 11, t)
+}

@@ -24,7 +24,7 @@ type Crawler struct {
 	// Internal fields
 	logFunc func(LogFlags, string, ...interface{})
 	push    chan *urlContainer
-	wg      sync.WaitGroup
+	wg      *sync.WaitGroup
 
 	visited         []string
 	pushPopRefCount int
@@ -43,14 +43,24 @@ func NewCrawler(visitor func(*http.Response, *goquery.Document) ([]*url.URL, boo
 	return NewCrawlerWithOptions(NewOptions(visitor, urlSelector))
 }
 
-func (this *Crawler) Run(seeds ...string) {
+func (this *Crawler) init(seeds []string) []*url.URL {
 	// Helper log function, takes care of filtering based on level
 	this.logFunc = getLogFunc(this.Options.Logger, this.Options.LogFlags, -1)
 
+	// Parse the seeds and get the host count
 	parsedSeeds, hostCount := this.parseSeeds(seeds)
-	this.logFunc(LogTrace, "Parsed seeds length: %d\n", len(parsedSeeds))
+	l := len(parsedSeeds)
+	this.logFunc(LogTrace, "Parsed seeds length: %d\n", l)
 	this.logFunc(LogTrace, "Initial host count is %d\n", hostCount)
 	this.logFunc(LogTrace, "Robot user-agent is %s\n", this.Options.RobotUserAgent)
+
+	// Create a shiny new WaitGroup
+	this.wg = new(sync.WaitGroup)
+
+	// Initialize the visits fields
+	this.visited = make([]string, 0, l)
+	this.pushPopRefCount = 0
+	this.visits = 0
 
 	// Create the workers map and the push channel (send harvested URLs to the crawler to enqueue)
 	if this.Options.SameHostOnly {
@@ -60,6 +70,12 @@ func (this *Crawler) Run(seeds ...string) {
 		this.workers = make(map[string]*worker, 10*hostCount)
 		this.push = make(chan *urlContainer, 10*hostCount)
 	}
+
+	return parsedSeeds
+}
+
+func (this *Crawler) Run(seeds ...string) {
+	parsedSeeds := this.init(seeds)
 
 	// Start with the seeds, and loop till death
 	this.enqueueUrls(&urlContainer{nil, false, parsedSeeds})
@@ -106,7 +122,7 @@ func (this *Crawler) launchWorker(u *url.URL) *worker {
 		this.Options.RobotUserAgent,
 		getLogFunc(this.Options.Logger, this.Options.LogFlags, i),
 		i,
-		&this.wg,
+		this.wg,
 		this.Options.CrawlDelay,
 		nil,
 		this.Options.Fetcher}
