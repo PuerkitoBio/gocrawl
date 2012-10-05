@@ -115,7 +115,13 @@ func (this *worker) requestUrl(u *url.URL) {
 				this.logFunc(LogError, "Error parsing robots.txt for host %s: %s\n", u.Host, e.Error())
 			} else {
 				this.logFunc(LogTrace, "Caching robots.txt group for host %s\n", u.Host)
-				this.robotsGroup = data.FindGroup(this.robotUserAgent)
+				if this.robotsGroup = data.FindGroup(this.robotUserAgent); this.robotsGroup != nil {
+					// Use robots.txt crawl-delay, if specified
+					if this.robotsGroup.CrawlDelay > 0 {
+						this.crawlDelay = this.robotsGroup.CrawlDelay
+						this.logFunc(LogTrace, "Setting crawl-delay to %v\n", this.crawlDelay)
+					}
+				}
 			}
 		} else {
 			// Normal path

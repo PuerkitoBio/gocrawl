@@ -3,3 +3,4 @@ Disallow: /
 
 User-agent: Googlebot
 Allow: /
+crawl-delay: 0.2
