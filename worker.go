@@ -82,11 +82,9 @@ func (this *worker) isAllowedPerRobotsPolicies(u *url.URL) bool {
 		}
 		return ok
 
-	} else if !isRobotsTxtUrl(u) {
-		this.logFunc(LogError, "Error no Robots.txt data for url %s\n", u.String())
-		// TODO: No robots.txt means access to all, but would give a 404 on the request and
-		// there would still be robots.txt data. This case is when there is NO data,
-		// which is highly unlikely and means something has gone wrong.
+	} else {
+		// No robots.txt group for this user-agent means allow access by default
+		this.logFunc(LogTrace, "No Robots.txt data for user-agent %s\n", this.robotUserAgent)
 	}
 
 	return true
@@ -111,8 +109,10 @@ func (this *worker) requestUrl(u *url.URL) {
 		// Special case if this is the robots.txt
 		if isRobotsTxtUrl(u) {
 			if data, e := robotstxt.FromResponse(res); e != nil {
+				// this.robotsGroup will be nil, which will allow access by default.
+				// Reasonable, since by default no robots.txt means full access, so invalid
+				// robots.txt is similar behavior.
 				this.logFunc(LogError, "Error parsing robots.txt for host %s: %s\n", u.Host, e.Error())
-				// TODO : Can't really continue, panic?
 			} else {
 				this.logFunc(LogTrace, "Caching robots.txt group for host %s\n", u.Host)
 				this.robotsGroup = data.FindGroup(this.robotUserAgent)

@@ -82,7 +82,6 @@ The `Options` type provides the hooks and customizations offered by gocrawl. All
 ## TODOs
 
 *    Cleanup workers once idle for a given duration.
-*    Manage robots.txt error scenarios.
 *    Standardize log output.
 *    Doc, examples.
 
