@@ -38,16 +38,13 @@ func TestRobotDenyOtherBot(t *testing.T) {
 	assertCallCount(spyu, 5, t)
 }
 
-/*
-// TODO : This test fails because of a bug in robotstxt.go library, will try to fix and send a pull request.
 func TestRobotExplicitAllowPattern(t *testing.T) {
 	opts := NewOptions(nil, nil)
 	opts.SameHostOnly = false
-	opts.CrawlDelay = 1 * time.Second
+	opts.CrawlDelay = DefaultTestCrawlDelay
 	opts.LogFlags = LogError | LogTrace
 	spyv, spyu, _ := runFileFetcherWithOptions(opts, []string{"*"}, []string{"http://robotc/page1.html"})
 
 	assertCallCount(spyv, 4, t)
 	assertCallCount(spyu, 5, t)
 }
-*/
