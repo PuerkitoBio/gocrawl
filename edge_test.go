@@ -4,11 +4,10 @@ import (
 	"bytes"
 	"log"
 	"testing"
-	"time"
 )
 
 func xTestBasicRealHttpRequests(t *testing.T) {
-	spy := newVisitorSpy(1*time.Millisecond, nil, true)
+	spy := newVisitorSpy(0, nil, true)
 	c := NewCrawler(spy.f, nil)
 
 	c.Options.CrawlDelay = DefaultCrawlDelay
@@ -22,7 +21,7 @@ func xTestBasicRealHttpRequests(t *testing.T) {
 func TestInvalidSeed(t *testing.T) {
 	var b bytes.Buffer
 
-	spy := newVisitorSpy(1*time.Millisecond, nil, true)
+	spy := newVisitorSpy(0, nil, true)
 	c := NewCrawler(spy.f, nil)
 
 	c.Options.CrawlDelay = DefaultCrawlDelay
@@ -37,7 +36,7 @@ func TestInvalidSeed(t *testing.T) {
 func TestHostCount(t *testing.T) {
 	var b bytes.Buffer
 
-	spy := newVisitorSpy(1*time.Millisecond, nil, true)
+	spy := newVisitorSpy(0, nil, true)
 	c := NewCrawler(spy.f, nil)
 
 	c.Options.CrawlDelay = DefaultTestCrawlDelay
@@ -54,7 +53,7 @@ func TestHostCount(t *testing.T) {
 func TestCustomSelectorNoUrl(t *testing.T) {
 	var b bytes.Buffer
 
-	vspy := newVisitorSpy(1*time.Millisecond, nil, true)
+	vspy := newVisitorSpy(0, nil, true)
 	uspy := newUrlSelectorSpy(0)
 	c := NewCrawler(vspy.f, uspy.f)
 

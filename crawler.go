@@ -26,7 +26,9 @@ type Crawler struct {
 	push    chan *urlContainer
 	wg      *sync.WaitGroup
 
-	visited         []string
+	// keep visited URLs in map, O(1) access time vs O(n) for slice. The byte value
+	// is of no use, but this is the smallest type possible.
+	visited         map[string]byte
 	pushPopRefCount int
 	visits          int
 	workers         map[string]*worker
@@ -58,7 +60,7 @@ func (this *Crawler) init(seeds []string) []*url.URL {
 	this.wg = new(sync.WaitGroup)
 
 	// Initialize the visits fields
-	this.visited = make([]string, 0, l)
+	this.visited = make(map[string]byte, l)
 	this.pushPopRefCount = 0
 	this.visits = 0
 
@@ -138,22 +140,13 @@ func (this *Crawler) launchWorker(u *url.URL) *worker {
 	return w
 }
 
-func (this *Crawler) isVisited(u *url.URL) bool {
-	for _, v := range this.visited {
-		if u.String() == v {
-			return true
-		}
-	}
-	return false
-}
-
 func (this *Crawler) enqueueUrls(cont *urlContainer) (cnt int) {
 	for _, u := range cont.harvestedUrls {
 		var isVisited, forceEnqueue bool
 
 		// Normalize URL
 		purell.NormalizeURL(u, DefaultNormalizationFlags)
-		isVisited = this.isVisited(u)
+		_, isVisited = this.visited[u.String()]
 
 		// If a selector callback is specified, use this to filter URL
 		if this.Options.URLSelector != nil {
@@ -200,7 +193,7 @@ func (this *Crawler) enqueueUrls(cont *urlContainer) (cnt int) {
 
 			// Once it is stacked, it WILL be visited eventually, so add it to the visited slice
 			if !isVisited {
-				this.visited = append(this.visited, u.String())
+				this.visited[u.String()] = '0'
 			}
 
 		} else {
