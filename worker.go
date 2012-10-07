@@ -22,6 +22,7 @@ type worker struct {
 	index          int
 	wg             *sync.WaitGroup
 	crawlDelay     time.Duration
+	idleTTL        time.Duration
 	robotsGroup    *robotstxt.Group
 	fetcher        Fetcher
 }
@@ -39,11 +40,22 @@ func (this *worker) run() {
 
 	// Enter loop to process URLs until stop signal is received
 	for {
+		var idleChan <-chan time.Time
+
 		this.logFunc(LogTrace, "Waiting for pop...\n")
+
+		// Initialize the idle timeout channel, if required
+		if this.idleTTL > 0 {
+			idleChan = time.After(this.idleTTL)
+		}
 
 		select {
 		case <-this.stop:
 			this.logFunc(LogTrace, "Stop signal received.\n")
+			return
+
+		case <-idleChan:
+			this.logFunc(LogTrace, "Idle TTL timeout received.\n")
 			return
 
 		case batch := <-this.pop:

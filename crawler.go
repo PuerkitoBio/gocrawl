@@ -126,6 +126,7 @@ func (this *Crawler) launchWorker(u *url.URL) *worker {
 		i,
 		this.wg,
 		this.Options.CrawlDelay,
+		this.Options.WorkerIdleTTL,
 		nil,
 		this.Options.Fetcher}
 

@@ -15,6 +15,7 @@ const (
 	DefaultUserAgent          string                    = `Mozilla/5.0 (Windows NT 6.1; rv:15.0) Gecko/20120716 Firefox/15.0a2`
 	DefaultRobotUserAgent     string                    = `Googlebot (gocrawl v0.1)`
 	DefaultCrawlDelay         time.Duration             = 5 * time.Second
+	DefaultIdleTTL            time.Duration             = 0
 	DefaultNormalizationFlags purell.NormalizationFlags = purell.FlagsAllGreedy
 )
 
@@ -23,6 +24,7 @@ type Options struct {
 	RobotUserAgent        string
 	MaxVisits             int
 	CrawlDelay            time.Duration // Applied per host
+	WorkerIdleTTL         time.Duration
 	SameHostOnly          bool
 	URLNormalizationFlags purell.NormalizationFlags
 	URLVisitor            func(*http.Response, *goquery.Document) ([]*url.URL, bool)
@@ -40,6 +42,7 @@ func NewOptions(visitor func(*http.Response, *goquery.Document) ([]*url.URL, boo
 		DefaultRobotUserAgent,
 		0,
 		DefaultCrawlDelay,
+		DefaultIdleTTL,
 		true,
 		DefaultNormalizationFlags,
 		visitor,
