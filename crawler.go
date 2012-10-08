@@ -10,11 +10,13 @@ import (
 	"time"
 )
 
-// URL container returned by workers to the crawler
-type urlContainer struct {
+// Communication between worker and master crawler
+type workerResponse struct {
+	host          string
 	sourceUrl     *url.URL
 	visited       bool
 	harvestedUrls []*url.URL
+	idleDeath     bool
 }
 
 // The crawler itself, the master of the whole process
@@ -23,7 +25,7 @@ type Crawler struct {
 
 	// Internal fields
 	logFunc func(LogFlags, string, ...interface{})
-	push    chan *urlContainer
+	push    chan *workerResponse
 	wg      *sync.WaitGroup
 
 	// keep visited URLs in map, O(1) access time vs O(n) for slice. The byte value
@@ -67,10 +69,10 @@ func (this *Crawler) init(seeds []string) []*url.URL {
 	// Create the workers map and the push channel (send harvested URLs to the crawler to enqueue)
 	if this.Options.SameHostOnly {
 		this.workers = make(map[string]*worker, hostCount)
-		this.push = make(chan *urlContainer, hostCount)
+		this.push = make(chan *workerResponse, hostCount)
 	} else {
 		this.workers = make(map[string]*worker, 10*hostCount)
-		this.push = make(chan *urlContainer, 10*hostCount)
+		this.push = make(chan *workerResponse, 10*hostCount)
 	}
 
 	return parsedSeeds
@@ -80,7 +82,7 @@ func (this *Crawler) Run(seeds ...string) {
 	parsedSeeds := this.init(seeds)
 
 	// Start with the seeds, and loop till death
-	this.enqueueUrls(&urlContainer{nil, false, parsedSeeds})
+	this.enqueueUrls(&workerResponse{"", nil, false, parsedSeeds, false})
 	this.collectUrls()
 }
 
@@ -116,7 +118,9 @@ func (this *Crawler) launchWorker(u *url.URL) *worker {
 	stop := make(chan bool, 1)
 
 	// Create the worker
-	w := &worker{this.Options.URLVisitor,
+	w := &worker{
+		u.Host,
+		this.Options.URLVisitor,
 		this.push,
 		pop,
 		stop,
@@ -136,12 +140,12 @@ func (this *Crawler) launchWorker(u *url.URL) *worker {
 	// Launch worker
 	go w.run()
 	this.logFunc(LogTrace, "Worker %d launched.\n", i)
-	this.workers[u.Host] = w
+	this.workers[w.host] = w
 
 	return w
 }
 
-func (this *Crawler) enqueueUrls(cont *urlContainer) (cnt int) {
+func (this *Crawler) enqueueUrls(cont *workerResponse) (cnt int) {
 	for _, u := range cont.harvestedUrls {
 		var isVisited, forceEnqueue bool
 
@@ -220,9 +224,9 @@ func (this *Crawler) collectUrls() {
 
 	for {
 		select {
-		case cont := <-this.push:
-			// Received a URL container to enqueue
-			if cont.visited {
+		case res := <-this.push:
+			// Received a response, check if it contains URLs to enqueue
+			if res.visited {
 				this.visits++
 				if this.Options.MaxVisits > 0 && this.visits >= this.Options.MaxVisits {
 					// Limit reached, request workers to stop
@@ -230,8 +234,13 @@ func (this *Crawler) collectUrls() {
 					return
 				}
 			}
-			this.enqueueUrls(cont)
-			this.pushPopRefCount--
+			if res.idleDeath {
+				// The worker timed out from its Idle TTL delay, remove from active workers
+				delete(this.workers, res.host)
+			} else {
+				this.enqueueUrls(res)
+				this.pushPopRefCount--
+			}
 
 		case <-time.After(100 * time.Millisecond):
 			// Check if refcount is zero

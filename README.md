@@ -57,7 +57,7 @@ The `Options` type provides the hooks and customizations offered by gocrawl. All
 
 *    **MaxVisits** : The maximum number of pages *visited* before stopping the crawl. Probably more useful for development purposes. Note that the Crawler will send its stop signal once this number of visits is reached, but workers may be in the process of visiting other pages, so when the crawling stops, the number of pages visited will be *at least* MaxVisits, possibly more (worst case is `MaxVisits + number of active workers`). Defaults to zero, no maximum.
 
-*    **CrawlDelay** : The time to wait between each request to the same host. The delay starts as soon as the response is received from the host. This is a `time.Duration` type, so it can be specified with `5 * time.Second` for example (which is the default value, 5 seconds). If a crawl delay is specified in the robots.txt file, in the group matching the robot's user-agent, this delay is used instead.
+*    **CrawlDelay** : The time to wait between each request to the same host. The delay starts as soon as the response is received from the host. This is a `time.Duration` type, so it can be specified with `5 * time.Second` for example (which is the default value, 5 seconds). **If a crawl delay is specified in the robots.txt file, in the group matching the robot's user-agent, this delay is used instead**.
 
 *    **SameHostOnly** : A quick and easy configuration to limit the selected URLs only to those links targeting the same host, which is `true` by default.
 

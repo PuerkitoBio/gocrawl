@@ -12,8 +12,9 @@ import (
 )
 
 type worker struct {
+	host           string
 	visitor        func(*http.Response, *goquery.Document) ([]*url.URL, bool)
-	push           chan<- *urlContainer
+	push           chan<- *workerResponse
 	pop            popChannel
 	stop           chan bool
 	userAgent      string
@@ -56,6 +57,7 @@ func (this *worker) run() {
 
 		case <-idleChan:
 			this.logFunc(LogTrace, "Idle TTL timeout received.\n")
+			this.notifyURLProcessed(nil, false, nil, true)
 			return
 
 		case batch := <-this.pop:
@@ -68,7 +70,7 @@ func (this *worker) run() {
 					this.requestUrl(u)
 				} else {
 					// Must still notify Crawler that this URL was processed, although not visited
-					this.notifyURLProcessed(u, false, nil)
+					this.notifyURLProcessed(u, false, nil, false)
 				}
 
 				select {
@@ -106,7 +108,7 @@ func (this *worker) requestUrl(u *url.URL) {
 	// Fetch the document
 	if res, e := this.fetcher.Fetch(u, this.userAgent); e != nil {
 		this.logFunc(LogError, "Error GET for url %s: %s\n", u.String(), e.Error())
-		this.notifyURLProcessed(u, false, nil)
+		this.notifyURLProcessed(u, false, nil, false)
 
 	} else {
 		var harvested []*url.URL
@@ -146,20 +148,20 @@ func (this *worker) requestUrl(u *url.URL) {
 				this.logFunc(LogError, "Error returned from server for url %s: %s\n", u.String(), res.Status)
 			}
 		}
-		this.notifyURLProcessed(u, visited, harvested)
+		this.notifyURLProcessed(u, visited, harvested, false)
 
 		// Wait for crawl delay
 		<-wait
 	}
 }
 
-func (this *worker) notifyURLProcessed(u *url.URL, visited bool, harvested []*url.URL) {
+func (this *worker) notifyURLProcessed(u *url.URL, visited bool, harvested []*url.URL, idleDeath bool) {
 	// Do NOT notify for robots.txt URLs, this is an under-the-cover request,
 	// not an actual URL enqueued for crawling.
 	if !isRobotsTxtUrl(u) {
 		// Push harvested urls back to crawler, even if empty (uses the channel communication
 		// to decrement reference count of pending URLs)
-		this.push <- &urlContainer{u, visited, harvested}
+		this.push <- &workerResponse{this.host, u, visited, harvested, idleDeath}
 	}
 }
 
