@@ -237,6 +237,7 @@ func (this *Crawler) collectUrls() {
 			if res.idleDeath {
 				// The worker timed out from its Idle TTL delay, remove from active workers
 				delete(this.workers, res.host)
+				this.logFunc(LogTrace, "Cleared idle worker for host %s.\n", res.host)
 			} else {
 				this.enqueueUrls(res)
 				this.pushPopRefCount--

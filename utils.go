@@ -5,6 +5,9 @@ import (
 )
 
 func isRobotsTxtUrl(u *url.URL) bool {
+	if u == nil {
+		return false
+	}
 	return u.Path == "/robots.txt"
 }
 

@@ -2,6 +2,7 @@ package gocrawl
 
 import (
 	"testing"
+	"time"
 )
 
 func TestAllSameHost(t *testing.T) {
@@ -64,4 +65,18 @@ func TestRunTwiceSameInstance(t *testing.T) {
 
 	assertCallCount(spyv, 3, t)
 	assertCallCount(spyu, 11, t)
+}
+
+func TestIdleTimeOut(t *testing.T) {
+	opts := NewOptions(nil, nil)
+	opts.SameHostOnly = false
+	opts.WorkerIdleTTL = 200 * time.Millisecond
+	opts.CrawlDelay = DefaultTestCrawlDelay
+	opts.LogFlags = LogError | LogTrace
+	_, _, b := runFileFetcherWithOptions(opts,
+		[]string{"*"},
+		[]string{"http://hosta/page1.html", "http://hosta/page4.html", "http://hostb/pageunlinked.html"})
+
+	assertIsInLog(*b, "Cleared idle worker for host hostd", t)
+	assertIsInLog(*b, "Cleared idle worker for host hostunknown", t)
 }
