@@ -25,6 +25,67 @@ Once this is done, gocrawl may be installed as usual:
 
 `go get github.com/PuerkitoBio/gocrawl`
 
+## Example
+
+From `example_test.go`:
+
+```Go
+package gocrawl
+
+import (
+  "github.com/PuerkitoBio/goquery"
+  "log"
+  "net/http"
+  "net/url"
+  "os"
+  "regexp"
+  "time"
+)
+
+// Only enqueue the root and paths beginning with an "a"
+var rxOk = regexp.MustCompile(`http://duckduckgo\.com(/a.*)?$`)
+
+func visitor(res *http.Response, doc *goquery.Document) ([]*url.URL, bool) {
+  // Use the goquery document or res.Body to manipulate the data
+  // ...
+
+  // Return nil and true - let gocrawl find the links
+  return nil, true
+}
+
+func urlSelector(u *url.URL, src *url.URL, isVisited bool) bool {
+  return rxOk.MatchString(u.String())
+}
+
+func ExampleCrawl() {
+  // Set custom options
+  opts := NewOptions(visitor, urlSelector)
+  opts.CrawlDelay = 1 * time.Second
+  opts.LogFlags = LogInfo
+  opts.Logger = log.New(os.Stdout, "", 0)
+
+  // Play nice with ddgo when running the test!
+  opts.MaxVisits = 2
+
+  // Create crawler and start at root of duckduckgo
+  c := NewCrawlerWithOptions(opts)
+  c.Run("http://duckduckgo.com/")
+
+  // Output: robot user-agent: Googlebot (gocrawl v0.1)
+  // worker 1 launched for host duckduckgo.com
+  // worker 1 - waiting for pop...
+  // worker 1 - popped: http://duckduckgo.com/robots.txt
+  // worker 1 - popped: http://duckduckgo.com
+  // worker 1 - waiting for pop...
+  // worker 1 - popped: http://duckduckgo.com/about.html
+  // sending STOP signals...
+  // waiting for goroutines to complete...
+  // worker 1 - stop signal received.
+  // worker 1 - worker done.
+  // crawler done.
+}
+```
+
 ## API
 
 gocrawl can be described as a minimalist web crawler (hence the "slim" tag, at ~500 sloc), providing the basic engine upon which to build a full-fledged indexing machine with caching, persistence and staleness detection logic, or to use as is for quick and easy crawling. For gocrawl itself does not attempt to detect staleness of a page, nor does it implement a caching mechanism. If an URL is enqueued to be processed, it *will* make a request to fetch it (provided it is allowed by robots.txt - hence the "polite" tag). And there is no prioritization among the URLs to process, it assumes that all enqueued URLs must be visited at some point, and that the order in which they are is unimportant.
@@ -80,10 +141,6 @@ The `Options` type provides the hooks and customizations offered by gocrawl. All
 *    **Logger** : An instance of Go's built-in `*log.Logger` type. It can be created by calling `log.New()`. By default, a logger that prints to the standard output is used.
 
 *    **LogFlags** : The level of verbosity for the logger. Defaults to errors only (`LogError`). Can be a set of flags (i.e. `LogError | LogTrace`).
-
-## TODOs
-
-*    Doc, examples.
 
 [goquery]: https://github.com/PuerkitoBio/goquery
 [robots]: https://github.com/temoto/robotstxt.go
