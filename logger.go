@@ -11,8 +11,11 @@ type LogFlags uint
 const (
 	LogError LogFlags = 1 << iota
 	LogInfo
+	LogEnqueued
+	LogIgnored
 	LogTrace
 	LogNone LogFlags = 0
+	LogAll  LogFlags = LogError | LogInfo | LogEnqueued | LogIgnored | LogTrace
 )
 
 func getLogFunc(logger *log.Logger, level LogFlags, workerIndex int) func(LogFlags, string, ...interface{}) {
@@ -20,7 +23,7 @@ func getLogFunc(logger *log.Logger, level LogFlags, workerIndex int) func(LogFla
 		if logger != nil {
 			if workerIndex > 0 {
 				if level&minLevel == minLevel {
-					logger.Printf(fmt.Sprintf("Worker %d - %s", workerIndex, format), vals...)
+					logger.Printf(fmt.Sprintf("worker %d - %s", workerIndex, format), vals...)
 				}
 			} else {
 				if level&minLevel == minLevel {

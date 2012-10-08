@@ -59,6 +59,8 @@ The `Options` type provides the hooks and customizations offered by gocrawl. All
 
 *    **CrawlDelay** : The time to wait between each request to the same host. The delay starts as soon as the response is received from the host. This is a `time.Duration` type, so it can be specified with `5 * time.Second` for example (which is the default value, 5 seconds). **If a crawl delay is specified in the robots.txt file, in the group matching the robot's user-agent, this delay is used instead**.
 
+*    **WorkerIdleTTL** : The idle time-to-live allowed for a worker before it is cleared (its goroutine terminated). Defaults to 10 seconds.
+
 *    **SameHostOnly** : A quick and easy configuration to limit the selected URLs only to those links targeting the same host, which is `true` by default.
 
 *    **URLNormalizationFlags** : The flags to apply when normalizing the URL using the [purell][] library. The URLs found by crawling a page are normalized before being submitted to the URL selection criteria (to determine if they should be visited or not). Defaults to the most aggressive normalization allowed by purell, `purell.FlagsAllGreedy`.
@@ -81,8 +83,6 @@ The `Options` type provides the hooks and customizations offered by gocrawl. All
 
 ## TODOs
 
-*    Cleanup workers once idle for a given duration.
-*    Standardize log output.
 *    Doc, examples.
 
 [goquery]: https://github.com/PuerkitoBio/goquery

@@ -10,7 +10,7 @@ import (
 	"time"
 )
 
-// Communication between worker and master crawler
+// Communication from worker to the master crawler
 type workerResponse struct {
 	host          string
 	sourceUrl     *url.URL
@@ -36,17 +36,20 @@ type Crawler struct {
 	workers         map[string]*worker
 }
 
+// Crawler constructor with a pre-initialized Options object
 func NewCrawlerWithOptions(opts *Options) *Crawler {
 	ret := new(Crawler)
 	ret.Options = opts
 	return ret
 }
 
+// Crawler constructor with the visitor and selector callback functions
 func NewCrawler(visitor func(*http.Response, *goquery.Document) ([]*url.URL, bool),
 	urlSelector func(*url.URL, *url.URL, bool) bool) *Crawler {
 	return NewCrawlerWithOptions(NewOptions(visitor, urlSelector))
 }
 
+// Initialize the Crawler's internal fields before a crawling execution.
 func (this *Crawler) init(seeds []string) []*url.URL {
 	// Helper log function, takes care of filtering based on level
 	this.logFunc = getLogFunc(this.Options.Logger, this.Options.LogFlags, -1)
@@ -54,9 +57,9 @@ func (this *Crawler) init(seeds []string) []*url.URL {
 	// Parse the seeds and get the host count
 	parsedSeeds, hostCount := this.parseSeeds(seeds)
 	l := len(parsedSeeds)
-	this.logFunc(LogTrace, "Parsed seeds length: %d\n", l)
-	this.logFunc(LogTrace, "Initial host count is %d\n", hostCount)
-	this.logFunc(LogTrace, "Robot user-agent is %s\n", this.Options.RobotUserAgent)
+	this.logFunc(LogTrace, "init() - seeds length: %d\n", l)
+	this.logFunc(LogTrace, "init() - host count: %d\n", hostCount)
+	this.logFunc(LogInfo, "robot user-agent: %s\n", this.Options.RobotUserAgent)
 
 	// Create a shiny new WaitGroup
 	this.wg = new(sync.WaitGroup)
@@ -66,7 +69,8 @@ func (this *Crawler) init(seeds []string) []*url.URL {
 	this.pushPopRefCount = 0
 	this.visits = 0
 
-	// Create the workers map and the push channel (send harvested URLs to the crawler to enqueue)
+	// Create the workers map and the push channel (the channel used by workers
+	// to communicate back to the crawler)
 	if this.Options.SameHostOnly {
 		this.workers = make(map[string]*worker, hostCount)
 		this.push = make(chan *workerResponse, hostCount)
@@ -78,6 +82,9 @@ func (this *Crawler) init(seeds []string) []*url.URL {
 	return parsedSeeds
 }
 
+// Run starts the crawling process, based on the given seeds and the current
+// Options settings. Execution stops either when MaxVisits is reached (if specified)
+// or when no more URLs need visiting.
 func (this *Crawler) Run(seeds ...string) {
 	parsedSeeds := this.init(seeds)
 
@@ -95,10 +102,10 @@ func (this *Crawler) parseSeeds(seeds []string) ([]*url.URL, int) {
 
 	for _, s := range seeds {
 		if u, e := purell.NormalizeURLString(s, this.Options.URLNormalizationFlags); e != nil {
-			this.logFunc(LogError, "Error parsing seed URL %s\n", s)
+			this.logFunc(LogError, "ERROR parsing seed %s\n", s)
 		} else {
 			if parsed, e := url.Parse(u); e != nil {
-				this.logFunc(LogError, "Error parsing normalized seed URL %s\n", u)
+				this.logFunc(LogError, "ERROR parsing normalized seed %s\n", u)
 			} else {
 				parsedSeeds = append(parsedSeeds, parsed)
 				if indexInStrings(hosts, parsed.Host) == -1 {
@@ -111,6 +118,7 @@ func (this *Crawler) parseSeeds(seeds []string) ([]*url.URL, int) {
 	return parsedSeeds, len(hosts)
 }
 
+// Launch a new worker goroutine for a given host.
 func (this *Crawler) launchWorker(u *url.URL) *worker {
 	// Initialize index and channels
 	i := len(this.workers) + 1
@@ -139,14 +147,16 @@ func (this *Crawler) launchWorker(u *url.URL) *worker {
 
 	// Launch worker
 	go w.run()
-	this.logFunc(LogTrace, "Worker %d launched.\n", i)
+	this.logFunc(LogInfo, "worker %d launched for host %s\n", i, w.host)
 	this.workers[w.host] = w
 
 	return w
 }
 
-func (this *Crawler) enqueueUrls(cont *workerResponse) (cnt int) {
-	for _, u := range cont.harvestedUrls {
+// Enqueue the URLs returned from the worker, as long as it complies with the
+// selection policies.
+func (this *Crawler) enqueueUrls(res *workerResponse) (cnt int) {
+	for _, u := range res.harvestedUrls {
 		var isVisited, forceEnqueue bool
 
 		// Normalize URL
@@ -155,9 +165,9 @@ func (this *Crawler) enqueueUrls(cont *workerResponse) (cnt int) {
 
 		// If a selector callback is specified, use this to filter URL
 		if this.Options.URLSelector != nil {
-			if forceEnqueue = this.Options.URLSelector(u, cont.sourceUrl, isVisited); !forceEnqueue {
+			if forceEnqueue = this.Options.URLSelector(u, res.sourceUrl, isVisited); !forceEnqueue {
 				// Custom selector said NOT to use this url, so continue with next
-				this.logFunc(LogTrace, "Ignore URL on Custom Selector policy %s\n", u.String())
+				this.logFunc(LogIgnored, "ignore on custom selector policy: %s\n", u.String())
 				continue
 			}
 		}
@@ -166,14 +176,14 @@ func (this *Crawler) enqueueUrls(cont *workerResponse) (cnt int) {
 		// and comply with the same host policy if requested.
 		if !u.IsAbs() {
 			// Only absolute URLs are processed, so ignore
-			this.logFunc(LogTrace, "Ignore URL on Absolute URL policy %s\n", u.String())
+			this.logFunc(LogIgnored, "ignore on absolute policy: %s\n", u.String())
 
 		} else if !strings.HasPrefix(u.Scheme, "http") {
-			this.logFunc(LogTrace, "Ignore URL on Invalid Scheme policy %s\n", u.String())
+			this.logFunc(LogIgnored, "ignore on scheme policy: %s\n", u.String())
 
-		} else if cont.sourceUrl != nil && u.Host != cont.sourceUrl.Host && this.Options.SameHostOnly {
+		} else if res.sourceUrl != nil && u.Host != res.sourceUrl.Host && this.Options.SameHostOnly {
 			// Only allow URLs coming from the same host
-			this.logFunc(LogTrace, "Ignore URL on Same Host policy: %s\n", u.String())
+			this.logFunc(LogIgnored, "ignore on same host policy: %s\n", u.String())
 
 		} else if !isVisited || forceEnqueue {
 			// All is good, visit this URL (robots.txt verification is done by worker)
@@ -184,15 +194,15 @@ func (this *Crawler) enqueueUrls(cont *workerResponse) (cnt int) {
 				w = this.launchWorker(u)
 				// Automatically enqueue the robots.txt URL as first in line
 				if robUrl, e := getRobotsTxtUrl(u); e != nil {
-					this.logFunc(LogError, "Error parsing robots.txt URL from %s: %s\n", u.String(), e.Error())
+					this.logFunc(LogError, "ERROR parsing robots.txt from %s: %s\n", u.String(), e.Error())
 				} else {
-					this.logFunc(LogTrace, "Enqueue URL %s\n", robUrl.String())
+					this.logFunc(LogEnqueued, "enqueue: %s\n", robUrl.String())
 					w.pop.stack(robUrl)
 				}
 			}
 
 			cnt++
-			this.logFunc(LogTrace, "Enqueue URL %s\n", u.String())
+			this.logFunc(LogEnqueued, "enqueue: %s\n", u.String())
 			w.pop.stack(u)
 			this.pushPopRefCount++
 
@@ -202,21 +212,23 @@ func (this *Crawler) enqueueUrls(cont *workerResponse) (cnt int) {
 			}
 
 		} else {
-			this.logFunc(LogTrace, "Ignored URL on Already Visited policy: %s\n", u.String())
+			this.logFunc(LogIgnored, "ignore on already visited policy: %s\n", u.String())
 		}
 	}
 	return
 }
 
+// This is the main loop of the crawler, waiting for responses from the workers
+// and processing these responses.
 func (this *Crawler) collectUrls() {
 	defer func() {
-		this.logFunc(LogTrace, "Waiting for goroutines to complete...\n")
+		this.logFunc(LogInfo, "waiting for goroutines to complete...\n")
 		this.wg.Wait()
-		this.logFunc(LogTrace, "Done.\n")
+		this.logFunc(LogInfo, "crawler done.\n")
 	}()
 
 	stopAll := func() {
-		this.logFunc(LogTrace, "Sending STOP signals...\n")
+		this.logFunc(LogInfo, "sending STOP signals...\n")
 		for _, w := range this.workers {
 			w.stop <- true
 		}
@@ -237,7 +249,7 @@ func (this *Crawler) collectUrls() {
 			if res.idleDeath {
 				// The worker timed out from its Idle TTL delay, remove from active workers
 				delete(this.workers, res.host)
-				this.logFunc(LogTrace, "Cleared idle worker for host %s.\n", res.host)
+				this.logFunc(LogInfo, "worker for host %s cleared on idle policy\n", res.host)
 			} else {
 				this.enqueueUrls(res)
 				this.pushPopRefCount--

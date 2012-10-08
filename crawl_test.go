@@ -72,11 +72,11 @@ func TestIdleTimeOut(t *testing.T) {
 	opts.SameHostOnly = false
 	opts.WorkerIdleTTL = 200 * time.Millisecond
 	opts.CrawlDelay = DefaultTestCrawlDelay
-	opts.LogFlags = LogError | LogTrace
+	opts.LogFlags = LogInfo
 	_, _, b := runFileFetcherWithOptions(opts,
 		[]string{"*"},
 		[]string{"http://hosta/page1.html", "http://hosta/page4.html", "http://hostb/pageunlinked.html"})
 
-	assertIsInLog(*b, "Cleared idle worker for host hostd", t)
-	assertIsInLog(*b, "Cleared idle worker for host hostunknown", t)
+	assertIsInLog(*b, "worker for host hostd cleared on idle policy\n", t)
+	assertIsInLog(*b, "worker for host hostunknown cleared on idle policy\n", t)
 }
