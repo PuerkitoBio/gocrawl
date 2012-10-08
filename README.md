@@ -142,6 +142,11 @@ The `Options` type provides the hooks and customizations offered by gocrawl. All
 
 *    **LogFlags** : The level of verbosity for the logger. Defaults to errors only (`LogError`). Can be a set of flags (i.e. `LogError | LogTrace`).
 
+## License
+
+The [BSD 3-Clause license][bsd].
+
+[bsd]: http://opensource.org/licenses/BSD-3-Clause
 [goquery]: https://github.com/PuerkitoBio/goquery
 [robots]: https://github.com/temoto/robotstxt.go
 [netclient]: http://golang.org/pkg/net/http/#Client
