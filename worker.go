@@ -1,9 +1,11 @@
 package gocrawl
 
 import (
+	"bytes"
 	"exp/html"
 	"github.com/PuerkitoBio/goquery"
 	"github.com/temoto/robotstxt.go"
+	"io/ioutil"
 	"net/http"
 	"net/url"
 	"strings"
@@ -60,7 +62,7 @@ func (this *worker) run() {
 
 		case <-idleChan:
 			this.logFunc(LogInfo, "idle timeout received.\n")
-			this.notifyURLProcessed(nil, false, nil, true)
+			this.sendResponse(nil, false, nil, true)
 			return
 
 		case batch := <-this.pop:
@@ -73,7 +75,7 @@ func (this *worker) run() {
 					this.requestUrl(u)
 				} else {
 					// Must still notify Crawler that this URL was processed, although not visited
-					this.notifyURLProcessed(u, false, nil, false)
+					this.sendResponse(u, false, nil, false)
 				}
 
 				select {
@@ -118,7 +120,7 @@ func (this *worker) requestUrl(u *url.URL) {
 	// so that the host admin can see what robots are doing requests.
 	if res, e := this.fetcher.Fetch(u, agent); e != nil {
 		this.logFunc(LogError, "ERROR fetching %s: %s\n", u.String(), e.Error())
-		this.notifyURLProcessed(u, false, nil, false)
+		this.sendResponse(u, false, nil, false)
 
 	} else {
 		var harvested []*url.URL
@@ -157,7 +159,7 @@ func (this *worker) requestUrl(u *url.URL) {
 				this.logFunc(LogError, "ERROR status code for %s: %s\n", u.String(), res.Status)
 			}
 		}
-		this.notifyURLProcessed(u, visited, harvested, false)
+		this.sendResponse(u, visited, harvested, false)
 
 		// Wait for crawl delay
 		<-wait
@@ -165,14 +167,14 @@ func (this *worker) requestUrl(u *url.URL) {
 }
 
 // Send a response to the crawler.
-// TODO : Rename.
-func (this *worker) notifyURLProcessed(u *url.URL, visited bool, harvested []*url.URL, idleDeath bool) {
+func (this *worker) sendResponse(u *url.URL, visited bool, harvested []*url.URL, idleDeath bool) {
 	// Do NOT notify for robots.txt URLs, this is an under-the-cover request,
 	// not an actual URL enqueued for crawling.
 	if !isRobotsTxtUrl(u) {
 		// Push harvested urls back to crawler, even if empty (uses the channel communication
 		// to decrement reference count of pending URLs)
-		this.push <- &workerResponse{this.host, u, visited, harvested, idleDeath}
+		res := &workerResponse{this.host, u, visited, harvested, idleDeath}
+		this.push <- res
 	}
 }
 
@@ -183,11 +185,16 @@ func (this *worker) visitUrl(res *http.Response) []*url.URL {
 	var doLinks bool
 
 	// Load a goquery document and call the visitor function
-	if node, e := html.Parse(res.Body); e != nil {
-		this.logFunc(LogError, "ERROR parsing %s: %s\n", res.Request.URL.String(), e.Error())
+	if bd, e := ioutil.ReadAll(res.Body); e != nil {
+		this.logFunc(LogError, "ERROR reading body %s: %s\n", res.Request.URL.String(), e.Error())
 	} else {
-		doc = goquery.NewDocumentFromNode(node)
-		doc.Url = res.Request.URL
+		if node, e := html.Parse(bytes.NewBuffer(bd)); e != nil {
+			this.logFunc(LogError, "ERROR parsing %s: %s\n", res.Request.URL.String(), e.Error())
+		} else {
+			doc = goquery.NewDocumentFromNode(node)
+			doc.Url = res.Request.URL
+		}
+		res.Body = ioutil.NopCloser(bytes.NewBuffer(bd))
 	}
 
 	// Visit the document (with nil goquery doc if failed to load)

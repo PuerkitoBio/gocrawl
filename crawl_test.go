@@ -1,6 +1,10 @@
 package gocrawl
 
 import (
+	"github.com/PuerkitoBio/goquery"
+	"io/ioutil"
+	"net/http"
+	"net/url"
 	"testing"
 	"time"
 )
@@ -79,4 +83,25 @@ func TestIdleTimeOut(t *testing.T) {
 
 	assertIsInLog(*b, "worker for host hostd cleared on idle policy\n", t)
 	assertIsInLog(*b, "worker for host hostunknown cleared on idle policy\n", t)
+}
+
+func TestReadBodyInVisitor(t *testing.T) {
+	var err error
+	var b []byte
+
+	c := NewCrawler(func(res *http.Response, doc *goquery.Document) ([]*url.URL, bool) {
+		b, err = ioutil.ReadAll(res.Body)
+		return nil, false
+	}, nil)
+
+	c.Options.Fetcher = newFileFetcher("./testdata/")
+	c.Options.CrawlDelay = DefaultTestCrawlDelay
+	c.Options.LogFlags = LogAll
+	c.Run("http://hostc/page3.html")
+
+	if err != nil {
+		t.Error(err)
+	} else if len(b) == 0 {
+		t.Error("Empty body")
+	}
 }
