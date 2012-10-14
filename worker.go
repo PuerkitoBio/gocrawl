@@ -212,7 +212,7 @@ func (this *worker) visitUrl(res *http.Response) []*url.URL {
 
 // Scrape the document's content to gather all links
 func (this *worker) processLinks(doc *goquery.Document) (result []*url.URL) {
-	urls := doc.Root.Find("a[href]").Map(func(_ int, s *goquery.Selection) string {
+	urls := doc.Find("a[href]").Map(func(_ int, s *goquery.Selection) string {
 		val, _ := s.Attr("href")
 		return val
 	})

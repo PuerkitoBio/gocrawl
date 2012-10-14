@@ -5,7 +5,8 @@ import (
 )
 
 func TestExtension(t *testing.T) {
-	ex := new(MyExt)
-	ex.Visited()
-	ex.Enqueued()
+	/*	ex := new(MyExt)
+		ex.Visited()
+		ex.Enqueued()
+		CallAll(ex)*/
 }

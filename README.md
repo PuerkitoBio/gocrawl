@@ -25,6 +25,11 @@ Once this is done, gocrawl may be installed as usual:
 
 `go get github.com/PuerkitoBio/gocrawl`
 
+## Changelog
+
+*    **v0.2.0** : *In development on master branch* rework extension/hooks.
+*    **v0.1.0** : Initial release.
+
 ## Example
 
 From `example_test.go`:
@@ -93,6 +98,10 @@ gocrawl can be described as a minimalist web crawler (hence the "slim" tag, at ~
 However, it does provide plenty of [hooks and customizations](#hc). Instead of trying to do everything and impose a way to do it, it offers ways to manipulate and adapt it to anyone's needs.
 
 As usual, the complete godoc reference can be found [here][godoc].
+
+### Design rationale
+
+TODO : Document rationale behind worker-per-host, delay, ...
 
 ### Crawler
 
