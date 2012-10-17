@@ -101,9 +101,17 @@ As usual, the complete godoc reference can be found [here][godoc].
 
 ### Design rationale
 
-TODO : Document rationale behind worker-per-host, delay, ...
+The major use-case behind gocrawl is to crawl some web pages while respecting the constraints of `robots.txt` policies and while applying a *good web citizen* crawl delay between each request to a given host. Hence the following design decisions:
+
+* **Each host spawns its own worker (goroutine)** : This makes sense since it must first read its robots.txt data, and only then proceed sequentially, one request at a time, with the specified delay between each fetch. There are no constraints inter-host, so each separate worker can crawl independently.
+* **The visitor function is called on the worker goroutine** : Again, this is ok because the crawl delay is likely bigger than the time required to parse the document, so this processing will usually *not* penalize the performance. Same goes for the passing of a goquery Document object to the visitor function, there is no way to bypass this behaviour even if the goquery document is not needed, because it will usually not matter (the worker will most likely still need to block waiting for its green light for the next fetch).
+* **Edge cases with no crawl delay are supported, but not optimized** : In the rare but possible event when a crawl with no delay is needed (e.g.: on your own servers, or with permission outside busy hours, etc.), gocrawl accepts a null (zero) delay, but doesn't provide optimizations. That is, there is no "special path" in the code where visitor functions are de-coupled from the worker, or where multiple workers can be launched concurrently on the same host. In fact, if this case is your *only* use-case, I would recommend *not* to use a library at all - since there is little value in it -, and simply use Go's standard libs and fetch at will with as many goroutines as are necessary.
+
+Although it could probably be used to crawl a massive amount of web pages (after all, this is *fetch, visit, enqueue, repeat ad nauseam*!), most realistic use-cases should be based on a well-known, well-defined limited bucket of seeds. Distributed crawling is your friend, should you need to move past this reasonable use.
 
 ### Crawler
+
+TODO : Example of how to extend...
 
 The Crawler type controls the whole execution. It spawns worker goroutines and manages the URL queue. There are two helper constructors:
 
@@ -150,6 +158,10 @@ The `Options` type provides the hooks and customizations offered by gocrawl. All
 *    **Logger** : An instance of Go's built-in `*log.Logger` type. It can be created by calling `log.New()`. By default, a logger that prints to the standard output is used.
 
 *    **LogFlags** : The level of verbosity for the logger. Defaults to errors only (`LogError`). Can be a set of flags (i.e. `LogError | LogTrace`).
+
+## Thanks
+
+Richard Penman
 
 ## License
 

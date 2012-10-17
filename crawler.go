@@ -24,9 +24,10 @@ type Crawler struct {
 	Options *Options
 
 	// Internal fields
-	logFunc func(LogFlags, string, ...interface{})
-	push    chan *workerResponse
-	wg      *sync.WaitGroup
+	logFunc   func(LogFlags, string, ...interface{})
+	push      chan *workerResponse
+	wg        *sync.WaitGroup
+	endReason EndReason
 
 	// keep visited URLs in map, O(1) access time vs O(n) for slice. The byte value
 	// is of no use, but this is the smallest type possible.
@@ -45,8 +46,8 @@ func NewCrawlerWithOptions(opts *Options) *Crawler {
 
 // Crawler constructor with the visitor and selector callback functions
 func NewCrawler(visitor func(*http.Response, *goquery.Document) ([]*url.URL, bool),
-	urlSelector func(*url.URL, *url.URL, bool) bool) *Crawler {
-	return NewCrawlerWithOptions(NewOptions(visitor, urlSelector))
+	filter func(*url.URL, *url.URL, bool) (bool, int)) *Crawler {
+	return NewCrawlerWithOptions(NewOptions(visitor, filter))
 }
 
 // Initialize the Crawler's internal fields before a crawling execution.
@@ -86,11 +87,14 @@ func (this *Crawler) init(seeds []string) []*url.URL {
 // Options settings. Execution stops either when MaxVisits is reached (if specified)
 // or when no more URLs need visiting.
 func (this *Crawler) Run(seeds ...string) {
+	seeds = this.Options.Extender.Start(seeds)
 	parsedSeeds := this.init(seeds)
 
 	// Start with the seeds, and loop till death
 	this.enqueueUrls(&workerResponse{"", nil, false, parsedSeeds, false})
 	this.collectUrls()
+
+	this.Options.Extender.End(this.endReason)
 }
 
 // Parse the seeds URL strings to URL objects, and return the URL objects slice,
@@ -102,9 +106,11 @@ func (this *Crawler) parseSeeds(seeds []string) ([]*url.URL, int) {
 
 	for _, s := range seeds {
 		if u, e := purell.NormalizeURLString(s, this.Options.URLNormalizationFlags); e != nil {
+			this.Options.Extender.Error(newCrawlError(e, CekParseSeed))
 			this.logFunc(LogError, "ERROR parsing seed %s\n", s)
 		} else {
 			if parsed, e := url.Parse(u); e != nil {
+				this.Options.Extender.Error(newCrawlError(e, CekParseNormalizedSeed))
 				this.logFunc(LogError, "ERROR parsing normalized seed %s\n", u)
 			} else {
 				parsedSeeds = append(parsedSeeds, parsed)
@@ -128,19 +134,19 @@ func (this *Crawler) launchWorker(u *url.URL) *worker {
 	// Create the worker
 	w := &worker{
 		u.Host,
-		this.Options.URLVisitor,
+		i,
+		this.Options.UserAgent,
+		this.Options.RobotUserAgent,
 		this.push,
 		pop,
 		stop,
-		this.Options.UserAgent,
-		this.Options.RobotUserAgent,
-		getLogFunc(this.Options.Logger, this.Options.LogFlags, i),
-		i,
 		this.wg,
 		this.Options.CrawlDelay,
 		this.Options.WorkerIdleTTL,
 		nil,
-		this.Options.Fetcher}
+		this.Options.Extender,
+		getLogFunc(this.Options.Logger, this.Options.LogFlags, i),
+		0}
 
 	// Increment wait group count
 	this.wg.Add(1)
@@ -157,22 +163,20 @@ func (this *Crawler) launchWorker(u *url.URL) *worker {
 // selection policies.
 func (this *Crawler) enqueueUrls(res *workerResponse) (cnt int) {
 	for _, u := range res.harvestedUrls {
-		var isVisited, forceEnqueue bool
+		var isVisited, enqueue bool
 
 		// Normalize URL
 		purell.NormalizeURL(u, DefaultNormalizationFlags)
 		_, isVisited = this.visited[u.String()]
 
-		// If a selector callback is specified, use this to filter URL
-		if this.Options.URLSelector != nil {
-			if forceEnqueue = this.Options.URLSelector(u, res.sourceUrl, isVisited); !forceEnqueue {
-				// Custom selector said NOT to use this url, so continue with next
-				this.logFunc(LogIgnored, "ignore on custom selector policy: %s\n", u.String())
-				continue
-			}
+		// Filter the URL - TODO : Priority is ignored at the moment
+		if enqueue, _ = this.Options.Extender.Filter(u, res.sourceUrl, isVisited); !enqueue {
+			// Filter said NOT to use this url, so continue with next
+			this.logFunc(LogIgnored, "ignore on filter policy: %s\n", u.String())
+			continue
 		}
 
-		// Even if custom selector said to use the URL, it still MUST be absolute, http(s)-prefixed,
+		// Even if filter said to use the URL, it still MUST be absolute, http(s)-prefixed,
 		// and comply with the same host policy if requested.
 		if !u.IsAbs() {
 			// Only absolute URLs are processed, so ignore
@@ -185,24 +189,28 @@ func (this *Crawler) enqueueUrls(res *workerResponse) (cnt int) {
 			// Only allow URLs coming from the same host
 			this.logFunc(LogIgnored, "ignore on same host policy: %s\n", u.String())
 
-		} else if !isVisited || forceEnqueue {
+		} else {
 			// All is good, visit this URL (robots.txt verification is done by worker)
 
 			// Launch worker if required
 			w, ok := this.workers[u.Host]
 			if !ok {
+				// No worker exists for this host, launch a new one
 				w = this.launchWorker(u)
 				// Automatically enqueue the robots.txt URL as first in line
 				if robUrl, e := getRobotsTxtUrl(u); e != nil {
+					this.Options.Extender.Error(newCrawlError(e, CekParseRobots))
 					this.logFunc(LogError, "ERROR parsing robots.txt from %s: %s\n", u.String(), e.Error())
 				} else {
 					this.logFunc(LogEnqueued, "enqueue: %s\n", robUrl.String())
+					this.Options.Extender.Enqueued(robUrl, res.sourceUrl)
 					w.pop.stack(robUrl)
 				}
 			}
 
 			cnt++
 			this.logFunc(LogEnqueued, "enqueue: %s\n", u.String())
+			this.Options.Extender.Enqueued(u, res.sourceUrl)
 			w.pop.stack(u)
 			this.pushPopRefCount++
 
@@ -210,9 +218,6 @@ func (this *Crawler) enqueueUrls(res *workerResponse) (cnt int) {
 			if !isVisited {
 				this.visited[u.String()] = '0'
 			}
-
-		} else {
-			this.logFunc(LogIgnored, "ignore on already visited policy: %s\n", u.String())
 		}
 	}
 	return
@@ -242,6 +247,7 @@ func (this *Crawler) collectUrls() {
 				this.visits++
 				if this.Options.MaxVisits > 0 && this.visits >= this.Options.MaxVisits {
 					// Limit reached, request workers to stop
+					this.endReason = ErMaxVisits
 					stopAll()
 					return
 				}
@@ -258,6 +264,7 @@ func (this *Crawler) collectUrls() {
 		case <-time.After(100 * time.Millisecond):
 			// Check if refcount is zero
 			if this.pushPopRefCount == 0 {
+				this.endReason = ErDone
 				stopAll()
 				return
 			}

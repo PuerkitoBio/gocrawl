@@ -93,3 +93,15 @@ func TestNoVisitorFunc(t *testing.T) {
 	c.Run("http://hosta/page1.html")
 	assertIsInLog(b, "missing visitor function: http://hosta/page1.html\n", t)
 }
+
+func TestNoCrawlDelay(t *testing.T) {
+	var b bytes.Buffer
+
+	opts := NewOptions(nil, nil)
+	opts.SameHostOnly = true
+	opts.CrawlDelay = 0
+	spyv, spyu, _ := runFileFetcherWithOptions(opts, []string{"*"}, []string{"http://hosta/page1.html", "http://hosta/page4.html"})
+
+	assertCallCount(spyv, 5, t)
+	assertCallCount(spyu, 13, t)
+}

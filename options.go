@@ -28,18 +28,23 @@ type Options struct {
 	WorkerIdleTTL         time.Duration
 	SameHostOnly          bool
 	URLNormalizationFlags purell.NormalizationFlags
-	URLVisitor            func(*http.Response, *goquery.Document) ([]*url.URL, bool)
-	URLSelector           func(target *url.URL, origin *url.URL, isVisited bool) bool
-	Fetcher               Fetcher
 	Logger                *log.Logger
 	LogFlags              LogFlags
+	Extender              Extender
 }
 
-// Options constructor based on a visitor and selector callback functions.
+// Options constructor based on a visitor and filter callback functions.
 func NewOptions(visitor func(*http.Response, *goquery.Document) ([]*url.URL, bool),
-	urlSelector func(*url.URL, *url.URL, bool) bool) *Options {
+	filter func(*url.URL, *url.URL, bool) (bool, int)) *Options {
 
-	// Use defaults except for Visitor func
+	return NewOptionsWithExtender(&DefaultExtender{
+		visitor,
+		filter,
+	})
+}
+
+func NewOptionsWithExtender(ext Extender) *Options {
+	// Use defaults except for Extender
 	return &Options{DefaultUserAgent,
 		DefaultRobotUserAgent,
 		0,
@@ -47,9 +52,7 @@ func NewOptions(visitor func(*http.Response, *goquery.Document) ([]*url.URL, boo
 		DefaultIdleTTL,
 		true,
 		DefaultNormalizationFlags,
-		visitor,
-		urlSelector,
-		nil,
 		log.New(os.Stdout, "gocrawl ", log.LstdFlags|log.Lmicroseconds),
-		LogError}
+		LogError,
+		ext}
 }
