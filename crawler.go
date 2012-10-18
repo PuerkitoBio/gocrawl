@@ -106,11 +106,11 @@ func (this *Crawler) parseSeeds(seeds []string) ([]*url.URL, int) {
 
 	for _, s := range seeds {
 		if u, e := purell.NormalizeURLString(s, this.Options.URLNormalizationFlags); e != nil {
-			this.Options.Extender.Error(newCrawlError(e, CekParseSeed))
+			this.Options.Extender.Error(newCrawlError(e, CekParseSeed, nil))
 			this.logFunc(LogError, "ERROR parsing seed %s\n", s)
 		} else {
 			if parsed, e := url.Parse(u); e != nil {
-				this.Options.Extender.Error(newCrawlError(e, CekParseNormalizedSeed))
+				this.Options.Extender.Error(newCrawlError(e, CekParseNormalizedSeed, nil))
 				this.logFunc(LogError, "ERROR parsing normalized seed %s\n", u)
 			} else {
 				parsedSeeds = append(parsedSeeds, parsed)
@@ -199,7 +199,7 @@ func (this *Crawler) enqueueUrls(res *workerResponse) (cnt int) {
 				w = this.launchWorker(u)
 				// Automatically enqueue the robots.txt URL as first in line
 				if robUrl, e := getRobotsTxtUrl(u); e != nil {
-					this.Options.Extender.Error(newCrawlError(e, CekParseRobots))
+					this.Options.Extender.Error(newCrawlError(e, CekParseRobots, u))
 					this.logFunc(LogError, "ERROR parsing robots.txt from %s: %s\n", u.String(), e.Error())
 				} else {
 					this.logFunc(LogEnqueued, "enqueue: %s\n", robUrl.String())

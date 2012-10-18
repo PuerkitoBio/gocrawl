@@ -2,7 +2,6 @@ package gocrawl
 
 import (
 	"github.com/PuerkitoBio/goquery"
-	"io"
 	"net/http"
 	"net/url"
 	"time"
@@ -25,6 +24,7 @@ const (
 	CekParseBody
 	CekParseSeed
 	CekParseNormalizedSeed
+	CekProcessLinks
 )
 
 var defaultClient = new(http.Client)
@@ -32,6 +32,7 @@ var defaultClient = new(http.Client)
 type CrawlError struct {
 	SourceError error
 	ErrorKind   CrawlErrorKind
+	URL         *url.URL
 	msg         string
 }
 
@@ -42,12 +43,12 @@ func (this CrawlError) Error() string {
 	return this.msg
 }
 
-func newCrawlError(e error, kind CrawlErrorKind) error {
-	return &CrawlError{e, kind, ""}
+func newCrawlError(e error, kind CrawlErrorKind, u *url.URL) error {
+	return &CrawlError{e, kind, u, ""}
 }
 
-func newCrawlErrorStatus(status string) error {
-	return &CrawlError{nil, CekHttpStatusCode, status}
+func newCrawlErrorMessage(msg string, kind CrawlErrorKind, u *url.URL) error {
+	return &CrawlError{nil, kind, u, msg}
 }
 
 type Extender interface {
@@ -57,7 +58,7 @@ type Extender interface {
 
 	ComputeDelay(host string, optsDelay time.Duration, robotsDelay time.Duration, lastFetch time.Duration) time.Duration
 	Fetch(u *url.URL, userAgent string) (res *http.Response, err error)
-	RequestRobots(u *url.URL, robotAgent string) (request bool, data io.Reader)
+	RequestRobots(u *url.URL, robotAgent string) (request bool, data []byte)
 
 	Filter(u *url.URL, from *url.URL, isVisited bool) (enqueue bool, priority int)
 	Enqueued(u *url.URL, from *url.URL)
@@ -107,7 +108,7 @@ func (this *DefaultExtender) Fetch(u *url.URL, userAgent string) (res *http.Resp
 }
 
 // Ask the worker to actually request (fetch) the Robots.txt document.
-func (this *DefaultExtender) RequestRobots(u *url.URL, robotAgent string) (request bool, data io.Reader) {
+func (this *DefaultExtender) RequestRobots(u *url.URL, robotAgent string) (request bool, data []byte) {
 	return true, nil
 }
 
