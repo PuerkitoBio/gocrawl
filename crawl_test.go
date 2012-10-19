@@ -1,10 +1,10 @@
 package gocrawl
 
 import (
-	"github.com/PuerkitoBio/goquery"
-	"io/ioutil"
-	"net/http"
-	"net/url"
+	//"github.com/PuerkitoBio/goquery"
+	//"io/ioutil"
+	//"net/http"
+	//"net/url"
 	"testing"
 	"time"
 )
@@ -13,10 +13,10 @@ func TestAllSameHost(t *testing.T) {
 	opts := NewOptions(nil, nil)
 	opts.SameHostOnly = true
 	opts.CrawlDelay = DefaultTestCrawlDelay
-	spyv, spyu, _ := runFileFetcherWithOptions(opts, []string{"*"}, []string{"http://hosta/page1.html", "http://hosta/page4.html"})
+	spy, _ := runFileFetcherWithOptions(opts, []string{"*"}, []string{"http://hosta/page1.html", "http://hosta/page4.html"})
 
-	assertCallCount(spyv, 5, t)
-	assertCallCount(spyu, 13, t)
+	assertCallCount(spy.visitCallCount, 5, t)
+	assertCallCount(spy.filterCallCount, 13, t)
 }
 
 func TestAllNotSameHost(t *testing.T) {
@@ -24,10 +24,10 @@ func TestAllNotSameHost(t *testing.T) {
 	opts.SameHostOnly = false
 	opts.CrawlDelay = DefaultTestCrawlDelay
 	opts.LogFlags = LogError | LogTrace
-	spyv, spyu, _ := runFileFetcherWithOptions(opts, []string{"*"}, []string{"http://hosta/page1.html", "http://hosta/page4.html"})
+	spy, _ := runFileFetcherWithOptions(opts, []string{"*"}, []string{"http://hosta/page1.html", "http://hosta/page4.html"})
 
-	assertCallCount(spyv, 10, t)
-	assertCallCount(spyu, 24, t)
+	assertCallCount(spy.visitCallCount, 10, t)
+	assertCallCount(spy.filterCallCount, 24, t)
 }
 
 func TestSelectOnlyPage1s(t *testing.T) {
@@ -35,40 +35,38 @@ func TestSelectOnlyPage1s(t *testing.T) {
 	opts.SameHostOnly = false
 	opts.CrawlDelay = DefaultTestCrawlDelay
 	opts.LogFlags = LogError | LogTrace
-	spyv, spyu, _ := runFileFetcherWithOptions(opts,
+	spy, _ := runFileFetcherWithOptions(opts,
 		[]string{"http://hosta/page1.html", "http://hostb/page1.html", "http://hostc/page1.html", "http://hostd/page1.html"},
 		[]string{"http://hosta/page1.html", "http://hosta/page4.html", "http://hostb/pageunlinked.html"})
 
-	assertCallCount(spyv, 3, t)
-	assertCallCount(spyu, 11, t)
+	assertCallCount(spy.visitCallCount, 3, t)
+	assertCallCount(spy.filterCallCount, 11, t)
 }
 
 func TestRunTwiceSameInstance(t *testing.T) {
-	spyv := newVisitorSpy(0, nil, true)
-	spyu := newUrlSelectorSpy(0, "*")
+	spy := new(spyExtender)
+	spy.configureVisit(0, nil, true)
+	spy.configureFilter(0, "*")
+	spy.configureFetch("./testdata/")
 
 	opts := NewOptions(nil, nil)
 	opts.SameHostOnly = true
 	opts.CrawlDelay = DefaultTestCrawlDelay
-	opts.URLVisitor = spyv.f
-	opts.URLSelector = spyu.f
 	opts.LogFlags = LogNone
-	opts.Fetcher = newFileFetcher("./testdata/")
+	opts.Extender = spy
 	c := NewCrawlerWithOptions(opts)
 	c.Run("http://hosta/page1.html", "http://hosta/page4.html")
 
-	assertCallCount(spyv, 5, t)
-	assertCallCount(spyu, 13, t)
+	assertCallCount(spy.visitCallCount, 5, t)
+	assertCallCount(spy.filterCallCount, 13, t)
 
-	spyv = newVisitorSpy(0, nil, true)
-	spyu = newUrlSelectorSpy(0, "http://hosta/page1.html", "http://hostb/page1.html", "http://hostc/page1.html", "http://hostd/page1.html")
-	opts.URLVisitor = spyv.f
-	opts.URLSelector = spyu.f
+	spy.resetCallCounts()
+	spy.configureFilter(0, "http://hosta/page1.html", "http://hostb/page1.html", "http://hostc/page1.html", "http://hostd/page1.html")
 	opts.SameHostOnly = false
 	c.Run("http://hosta/page1.html", "http://hosta/page4.html", "http://hostb/pageunlinked.html")
 
-	assertCallCount(spyv, 3, t)
-	assertCallCount(spyu, 11, t)
+	assertCallCount(spy.visitCallCount, 3, t)
+	assertCallCount(spy.filterCallCount, 11, t)
 }
 
 func TestIdleTimeOut(t *testing.T) {
@@ -77,7 +75,7 @@ func TestIdleTimeOut(t *testing.T) {
 	opts.WorkerIdleTTL = 200 * time.Millisecond
 	opts.CrawlDelay = DefaultTestCrawlDelay
 	opts.LogFlags = LogInfo
-	_, _, b := runFileFetcherWithOptions(opts,
+	_, b := runFileFetcherWithOptions(opts,
 		[]string{"*"},
 		[]string{"http://hosta/page1.html", "http://hosta/page4.html", "http://hostb/pageunlinked.html"})
 
@@ -85,6 +83,7 @@ func TestIdleTimeOut(t *testing.T) {
 	assertIsInLog(*b, "worker for host hostunknown cleared on idle policy\n", t)
 }
 
+/*
 func TestReadBodyInVisitor(t *testing.T) {
 	var err error
 	var b []byte
@@ -105,3 +104,4 @@ func TestReadBodyInVisitor(t *testing.T) {
 		t.Error("Empty body")
 	}
 }
+*/

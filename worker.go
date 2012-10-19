@@ -160,7 +160,9 @@ func (this *worker) requestRobotsTxt(u *url.URL, delay time.Duration) {
 
 		// Crawl delay starts now
 		wait := time.After(delay)
+
 		this.robotsGroup = this.getRobotsTxtGroup(nil, res)
+		this.extender.Visited(u, nil)
 
 		// Wait for crawl delay
 		<-wait
@@ -223,8 +225,10 @@ func (this *worker) requestUrl(u *url.URL, delay time.Duration) {
 func (this *worker) sendResponse(u *url.URL, visited bool, harvested []*url.URL, idleDeath bool) {
 	// Push harvested urls back to crawler, even if empty (uses the channel communication
 	// to decrement reference count of pending URLs)
-	res := &workerResponse{this.host, u, visited, harvested, idleDeath}
-	this.push <- res
+	if !isRobotsTxtUrl(u) {
+		res := &workerResponse{this.host, u, visited, harvested, idleDeath}
+		this.push <- res
+	}
 }
 
 // Process the response for a URL.
