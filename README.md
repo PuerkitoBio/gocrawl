@@ -27,7 +27,7 @@ Once this is done, gocrawl may be installed as usual:
 
 ## Changelog
 
-*    **v0.2.0** : *In development on master branch* rework extension/hooks.
+*    **v0.2.0** : *In development* **BREAKING CHANGES** rework extension/hooks.
 *    **v0.1.0** : Initial release.
 
 ## Example

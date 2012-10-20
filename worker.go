@@ -76,11 +76,16 @@ func (this *worker) run() {
 			// Got a batch of urls to crawl, loop and check at each iteration if a stop 
 			// is received.
 			for _, u := range batch {
+				var robDelay time.Duration
+
 				this.logFunc(LogInfo, "popped: %s\n", u.String())
 
 				// Get the crawl delay between this request and the next
+				if this.robotsGroup != nil {
+					robDelay = this.robotsGroup.CrawlDelay
+				}
 				crawlDelay := this.extender.ComputeDelay(this.host, this.crawlDelay,
-					this.robotsGroup.CrawlDelay, this.lastFetchDuration)
+					robDelay, this.lastFetchDuration)
 				this.logFunc(LogInfo, "using crawl-delay: %v\n", crawlDelay)
 
 				if isRobotsTxtUrl(u) {

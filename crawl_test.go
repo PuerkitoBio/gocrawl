@@ -1,10 +1,10 @@
 package gocrawl
 
 import (
-	//"github.com/PuerkitoBio/goquery"
-	//"io/ioutil"
-	//"net/http"
-	//"net/url"
+	"github.com/PuerkitoBio/goquery"
+	"io/ioutil"
+	"net/http"
+	"net/url"
 	"testing"
 	"time"
 )
@@ -15,8 +15,8 @@ func TestAllSameHost(t *testing.T) {
 	opts.CrawlDelay = DefaultTestCrawlDelay
 	spy, _ := runFileFetcherWithOptions(opts, []string{"*"}, []string{"http://hosta/page1.html", "http://hosta/page4.html"})
 
-	assertCallCount(spy.visitCallCount, 5, t)
-	assertCallCount(spy.filterCallCount, 13, t)
+	assertCallCount(spy, eMKVisit, 5, t)
+	assertCallCount(spy, eMKFilter, 13, t)
 }
 
 func TestAllNotSameHost(t *testing.T) {
@@ -26,8 +26,8 @@ func TestAllNotSameHost(t *testing.T) {
 	opts.LogFlags = LogError | LogTrace
 	spy, _ := runFileFetcherWithOptions(opts, []string{"*"}, []string{"http://hosta/page1.html", "http://hosta/page4.html"})
 
-	assertCallCount(spy.visitCallCount, 10, t)
-	assertCallCount(spy.filterCallCount, 24, t)
+	assertCallCount(spy, eMKVisit, 10, t)
+	assertCallCount(spy, eMKFilter, 24, t)
 }
 
 func TestSelectOnlyPage1s(t *testing.T) {
@@ -39,15 +39,12 @@ func TestSelectOnlyPage1s(t *testing.T) {
 		[]string{"http://hosta/page1.html", "http://hostb/page1.html", "http://hostc/page1.html", "http://hostd/page1.html"},
 		[]string{"http://hosta/page1.html", "http://hosta/page4.html", "http://hostb/pageunlinked.html"})
 
-	assertCallCount(spy.visitCallCount, 3, t)
-	assertCallCount(spy.filterCallCount, 11, t)
+	assertCallCount(spy, eMKVisit, 3, t)
+	assertCallCount(spy, eMKFilter, 11, t)
 }
 
 func TestRunTwiceSameInstance(t *testing.T) {
-	spy := new(spyExtender)
-	spy.configureVisit(0, nil, true)
-	spy.configureFilter(0, "*")
-	spy.configureFetch("./testdata/")
+	spy := newSpyExtenderConfigured(0, nil, true, 0, "*")
 
 	opts := NewOptions(nil, nil)
 	opts.SameHostOnly = true
@@ -57,16 +54,16 @@ func TestRunTwiceSameInstance(t *testing.T) {
 	c := NewCrawlerWithOptions(opts)
 	c.Run("http://hosta/page1.html", "http://hosta/page4.html")
 
-	assertCallCount(spy.visitCallCount, 5, t)
-	assertCallCount(spy.filterCallCount, 13, t)
+	assertCallCount(spy, eMKVisit, 5, t)
+	assertCallCount(spy, eMKFilter, 13, t)
 
-	spy.resetCallCounts()
-	spy.configureFilter(0, "http://hosta/page1.html", "http://hostb/page1.html", "http://hostc/page1.html", "http://hostd/page1.html")
+	spy = newSpyExtenderConfigured(0, nil, true, 0, "http://hosta/page1.html", "http://hostb/page1.html", "http://hostc/page1.html", "http://hostd/page1.html")
 	opts.SameHostOnly = false
+	opts.Extender = spy
 	c.Run("http://hosta/page1.html", "http://hosta/page4.html", "http://hostb/pageunlinked.html")
 
-	assertCallCount(spy.visitCallCount, 3, t)
-	assertCallCount(spy.filterCallCount, 11, t)
+	assertCallCount(spy, eMKVisit, 3, t)
+	assertCallCount(spy, eMKFilter, 11, t)
 }
 
 func TestIdleTimeOut(t *testing.T) {
@@ -83,7 +80,6 @@ func TestIdleTimeOut(t *testing.T) {
 	assertIsInLog(*b, "worker for host hostunknown cleared on idle policy\n", t)
 }
 
-/*
 func TestReadBodyInVisitor(t *testing.T) {
 	var err error
 	var b []byte
@@ -93,7 +89,7 @@ func TestReadBodyInVisitor(t *testing.T) {
 		return nil, false
 	}, nil)
 
-	c.Options.Fetcher = newFileFetcher("./testdata/")
+	c.Options.Extender = newFileFetcher(c.Options.Extender.(*DefaultExtender))
 	c.Options.CrawlDelay = DefaultTestCrawlDelay
 	c.Options.LogFlags = LogAll
 	c.Run("http://hostc/page3.html")
@@ -104,4 +100,3 @@ func TestReadBodyInVisitor(t *testing.T) {
 		t.Error("Empty body")
 	}
 }
-*/

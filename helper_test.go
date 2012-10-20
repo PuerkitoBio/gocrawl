@@ -9,74 +9,41 @@ import (
 	"os"
 	"path"
 	"strings"
-	"sync/atomic"
 	"testing"
 	"time"
 )
 
 const (
 	DefaultTestCrawlDelay = 100 * time.Millisecond
+	FileFetcherBasePath   = "./testdata/"
 )
 
-type spyExtender struct {
-	DefaultExtender
-	visitCallCount  int64
-	filterCallCount int64
-	basePath        string
+type extensionMethodKey uint8
 
-	v func(*http.Response, *goquery.Document) ([]*url.URL, bool)
-	f func(*url.URL, *url.URL, bool) (bool, int)
+const (
+	eMKStart extensionMethodKey = iota
+	eMKEnd
+	eMKError
+	eMKComputeDelay
+	eMKFetch
+	eMKRequestRobots
+	eMKFilter
+	eMKEnqueued
+	eMKVisit
+	eMKVisited
+	eMKDisallowed
+)
+
+// The file fetcher, that loads URLs from files in the testdata/ directory.
+type fileFetcherExtender struct {
+	*DefaultExtender
 }
 
-func (this *spyExtender) resetCallCounts() {
-	this.visitCallCount = 0
-	this.filterCallCount = 0
+func newFileFetcher(defExt *DefaultExtender) *fileFetcherExtender {
+	return &fileFetcherExtender{defExt}
 }
 
-func (this *spyExtender) configureVisit(delay time.Duration, urls []*url.URL, ret bool) {
-	this.v = func(res *http.Response, doc *goquery.Document) ([]*url.URL, bool) {
-		this.visitCallCount = atomic.AddInt64(&this.visitCallCount, 1)
-		time.Sleep(delay)
-		return urls, ret
-	}
-}
-
-func (this *spyExtender) configureFilter(delay time.Duration, whitelist ...string) {
-	this.f = func(target *url.URL, origin *url.URL, isVisited bool) (bool, int) {
-		this.filterCallCount = atomic.AddInt64(&this.filterCallCount, 1)
-		time.Sleep(delay)
-		if len(whitelist) == 1 && whitelist[0] == "*" {
-			// Allow all, unless already visited
-			return !isVisited, 0
-		} else if len(whitelist) > 0 {
-			if indexInStrings(whitelist, target.String()) >= 0 {
-				// Allow if whitelisted and not already visited
-				return !isVisited, 0
-			}
-		}
-		return false, 0
-	}
-}
-
-func (this *spyExtender) configureFetch(basePath string) {
-	this.basePath = basePath
-}
-
-func (this *spyExtender) Visit(res *http.Response, doc *goquery.Document) ([]*url.URL, bool) {
-	if this.v == nil {
-		return this.DefaultExtender.Visit(res, doc)
-	}
-	return this.v(res, doc)
-}
-
-func (this *spyExtender) Filter(target *url.URL, origin *url.URL, isVisited bool) (bool, int) {
-	if this.f == nil {
-		return this.DefaultExtender.Filter(target, origin, isVisited)
-	}
-	return this.f(target, origin, isVisited)
-}
-
-func (this *spyExtender) Fetch(u *url.URL, userAgent string) (*http.Response, error) {
+func (this *fileFetcherExtender) Fetch(u *url.URL, userAgent string) (*http.Response, error) {
 	var res *http.Response = new(http.Response)
 	var req *http.Request
 	var e error
@@ -89,7 +56,7 @@ func (this *spyExtender) Fetch(u *url.URL, userAgent string) (*http.Response, er
 	req.Header.Add("User-Agent", userAgent)
 
 	// Open the file specified as path in u, relative to testdata/[host]/
-	f, e := os.Open(path.Join(this.basePath, u.Host, u.Path))
+	f, e := os.Open(path.Join(FileFetcherBasePath, u.Host, u.Path))
 	if e != nil {
 		// Treat errors as 404s - file not found
 		res.Status = "404 Not Found"
@@ -104,13 +71,107 @@ func (this *spyExtender) Fetch(u *url.URL, userAgent string) (*http.Response, er
 	return res, e
 }
 
+// The spy extender extends the file fetcher and allows counting the number of
+// calls for each extender method.
+type spyExtender struct {
+	fileFetcherExtender
+	callCount map[extensionMethodKey]int64
+
+	v func(*http.Response, *goquery.Document) ([]*url.URL, bool)
+	f func(*url.URL, *url.URL, bool) (bool, int)
+}
+
+func newSpyExtender(v func(*http.Response, *goquery.Document) ([]*url.URL, bool),
+	f func(*url.URL, *url.URL, bool) (bool, int)) *spyExtender {
+	return &spyExtender{fileFetcherExtender{}, make(map[extensionMethodKey]int64, 11), v, f}
+}
+
+func newSpyExtenderConfigured(visitDelay time.Duration, returnUrls []*url.URL, doLinks bool,
+	filterDelay time.Duration, filterWhitelist ...string) *spyExtender {
+
+	v := func(res *http.Response, doc *goquery.Document) ([]*url.URL, bool) {
+		time.Sleep(visitDelay)
+		return returnUrls, doLinks
+	}
+
+	f := func(target *url.URL, origin *url.URL, isVisited bool) (bool, int) {
+		time.Sleep(filterDelay)
+		if len(filterWhitelist) == 1 && filterWhitelist[0] == "*" {
+			// Allow all, unless already visited
+			return !isVisited, 0
+		} else if len(filterWhitelist) > 0 {
+			if indexInStrings(filterWhitelist, target.String()) >= 0 {
+				// Allow if whitelisted and not already visited
+				return !isVisited, 0
+			}
+		}
+		return false, 0
+	}
+	return newSpyExtender(v, f)
+}
+
+func (this *spyExtender) resetCallCounts() {
+	this.callCount = make(map[extensionMethodKey]int64, 11)
+}
+
+func (this *spyExtender) Visit(res *http.Response, doc *goquery.Document) ([]*url.URL, bool) {
+	this.callCount[eMKVisit]++
+	if this.v == nil {
+		return this.fileFetcherExtender.Visit(res, doc)
+	}
+	return this.v(res, doc)
+}
+
+func (this *spyExtender) Filter(target *url.URL, origin *url.URL, isVisited bool) (bool, int) {
+	this.callCount[eMKFilter]++
+	if this.f == nil {
+		return this.fileFetcherExtender.Filter(target, origin, isVisited)
+	}
+	return this.f(target, origin, isVisited)
+}
+
+func (this *spyExtender) Start(seeds []string) []string {
+	this.callCount[eMKStart]++
+	return this.fileFetcherExtender.Start(seeds)
+}
+func (this *spyExtender) End(reason EndReason) {
+	this.callCount[eMKEnd]++
+	this.fileFetcherExtender.End(reason)
+}
+func (this *spyExtender) Error(err error) {
+	this.callCount[eMKError]++
+	this.fileFetcherExtender.Error(err)
+}
+func (this *spyExtender) ComputeDelay(host string, optsDelay time.Duration,
+	robotsDelay time.Duration, lastFetch time.Duration) time.Duration {
+	this.callCount[eMKComputeDelay]++
+	return this.fileFetcherExtender.ComputeDelay(host, optsDelay, robotsDelay, lastFetch)
+}
+func (this *spyExtender) Fetch(u *url.URL, userAgent string) (res *http.Response, err error) {
+	this.callCount[eMKFetch]++
+	return this.fileFetcherExtender.Fetch(u, userAgent)
+}
+func (this *spyExtender) RequestRobots(u *url.URL, robotAgent string) (request bool, data []byte) {
+	this.callCount[eMKRequestRobots]++
+	return this.fileFetcherExtender.RequestRobots(u, robotAgent)
+}
+func (this *spyExtender) Enqueued(u *url.URL, from *url.URL) {
+	this.callCount[eMKEnqueued]++
+	this.fileFetcherExtender.Enqueued(u, from)
+}
+func (this *spyExtender) Visited(u *url.URL, harvested []*url.URL) {
+	this.callCount[eMKVisited]++
+	this.fileFetcherExtender.Visited(u, harvested)
+}
+func (this *spyExtender) Disallowed(u *url.URL) {
+	this.callCount[eMKDisallowed]++
+	this.fileFetcherExtender.Disallowed(u)
+}
+
 func runFileFetcherWithOptions(opts *Options, urlSel []string, seeds []string) (spy *spyExtender, b *bytes.Buffer) {
 	// Initialize log, spies and crawler
 	b = new(bytes.Buffer)
-	spy = new(spyExtender)
-	spy.configureFilter(0, urlSel...)
-	spy.configureVisit(0, nil, true)
-	spy.configureFetch("./testdata/")
+	spy = newSpyExtenderConfigured(0, nil, true, 0, urlSel...)
 
 	opts.Extender = spy
 	opts.Logger = log.New(b, "", 0)
@@ -127,8 +188,8 @@ func assertIsInLog(buf bytes.Buffer, s string, t *testing.T) {
 	}
 }
 
-func assertCallCount(c int64, i int64, t *testing.T) {
-	if c != i {
-		t.Errorf("Expected %d call count, got %d.", i, c)
+func assertCallCount(spy *spyExtender, key extensionMethodKey, i int64, t *testing.T) {
+	if spy.callCount[key] != i {
+		t.Errorf("Expected %d call count, got %d.", i, spy.callCount[key])
 	}
 }
