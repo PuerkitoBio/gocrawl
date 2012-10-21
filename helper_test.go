@@ -138,7 +138,7 @@ func (this *spyExtender) End(reason EndReason) {
 	this.callCount[eMKEnd]++
 	this.fileFetcherExtender.End(reason)
 }
-func (this *spyExtender) Error(err error) {
+func (this *spyExtender) Error(err *CrawlError) {
 	this.callCount[eMKError]++
 	this.fileFetcherExtender.Error(err)
 }
@@ -191,5 +191,11 @@ func assertIsInLog(buf bytes.Buffer, s string, t *testing.T) {
 func assertCallCount(spy *spyExtender, key extensionMethodKey, i int64, t *testing.T) {
 	if spy.callCount[key] != i {
 		t.Errorf("Expected %d call count, got %d.", i, spy.callCount[key])
+	}
+}
+
+func assertPanic(t *testing.T) {
+	if e := recover(); e == nil {
+		t.Error("Expected a panic.")
 	}
 }

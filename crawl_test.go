@@ -10,7 +10,7 @@ import (
 )
 
 func TestAllSameHost(t *testing.T) {
-	opts := NewOptions(nil, nil)
+	opts := NewOptions(nil)
 	opts.SameHostOnly = true
 	opts.CrawlDelay = DefaultTestCrawlDelay
 	spy, _ := runFileFetcherWithOptions(opts, []string{"*"}, []string{"http://hosta/page1.html", "http://hosta/page4.html"})
@@ -20,7 +20,7 @@ func TestAllSameHost(t *testing.T) {
 }
 
 func TestAllNotSameHost(t *testing.T) {
-	opts := NewOptions(nil, nil)
+	opts := NewOptions(nil)
 	opts.SameHostOnly = false
 	opts.CrawlDelay = DefaultTestCrawlDelay
 	opts.LogFlags = LogError | LogTrace
@@ -31,7 +31,7 @@ func TestAllNotSameHost(t *testing.T) {
 }
 
 func TestSelectOnlyPage1s(t *testing.T) {
-	opts := NewOptions(nil, nil)
+	opts := NewOptions(nil)
 	opts.SameHostOnly = false
 	opts.CrawlDelay = DefaultTestCrawlDelay
 	opts.LogFlags = LogError | LogTrace
@@ -46,11 +46,10 @@ func TestSelectOnlyPage1s(t *testing.T) {
 func TestRunTwiceSameInstance(t *testing.T) {
 	spy := newSpyExtenderConfigured(0, nil, true, 0, "*")
 
-	opts := NewOptions(nil, nil)
+	opts := NewOptions(spy)
 	opts.SameHostOnly = true
 	opts.CrawlDelay = DefaultTestCrawlDelay
 	opts.LogFlags = LogNone
-	opts.Extender = spy
 	c := NewCrawlerWithOptions(opts)
 	c.Run("http://hosta/page1.html", "http://hosta/page4.html")
 
@@ -67,7 +66,7 @@ func TestRunTwiceSameInstance(t *testing.T) {
 }
 
 func TestIdleTimeOut(t *testing.T) {
-	opts := NewOptions(nil, nil)
+	opts := NewOptions(nil)
 	opts.SameHostOnly = false
 	opts.WorkerIdleTTL = 200 * time.Millisecond
 	opts.CrawlDelay = DefaultTestCrawlDelay
@@ -80,23 +79,29 @@ func TestIdleTimeOut(t *testing.T) {
 	assertIsInLog(*b, "worker for host hostunknown cleared on idle policy\n", t)
 }
 
+type bodyExtender struct {
+	fileFetcherExtender
+
+	err error
+	b   []byte
+}
+
+func (this *bodyExtender) Visit(res *http.Response, doc *goquery.Document) ([]*url.URL, bool) {
+	this.b, this.err = ioutil.ReadAll(res.Body)
+	return nil, false
+}
+
 func TestReadBodyInVisitor(t *testing.T) {
-	var err error
-	var b []byte
+	var be = new(bodyExtender)
+	c := NewCrawler(be)
 
-	c := NewCrawler(func(res *http.Response, doc *goquery.Document) ([]*url.URL, bool) {
-		b, err = ioutil.ReadAll(res.Body)
-		return nil, false
-	}, nil)
-
-	c.Options.Extender = newFileFetcher(c.Options.Extender.(*DefaultExtender))
 	c.Options.CrawlDelay = DefaultTestCrawlDelay
 	c.Options.LogFlags = LogAll
 	c.Run("http://hostc/page3.html")
 
-	if err != nil {
-		t.Error(err)
-	} else if len(b) == 0 {
+	if be.err != nil {
+		t.Error(be.err)
+	} else if len(be.b) == 0 {
 		t.Error("Empty body")
 	}
 }

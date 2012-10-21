@@ -1,11 +1,8 @@
 package gocrawl
 
 import (
-	"github.com/PuerkitoBio/goquery"
 	"github.com/PuerkitoBio/purell"
 	"log"
-	"net/http"
-	"net/url"
 	"os"
 	"time"
 )
@@ -33,17 +30,7 @@ type Options struct {
 	Extender              Extender
 }
 
-// Options constructor based on a visitor and filter callback functions.
-func NewOptions(visitor func(*http.Response, *goquery.Document) ([]*url.URL, bool),
-	filter func(*url.URL, *url.URL, bool) (bool, int)) *Options {
-
-	return NewOptionsWithExtender(&DefaultExtender{
-		visitor,
-		filter,
-	})
-}
-
-func NewOptionsWithExtender(ext Extender) *Options {
+func NewOptions(ext Extender) *Options {
 	// Use defaults except for Extender
 	return &Options{DefaultUserAgent,
 		DefaultRobotUserAgent,

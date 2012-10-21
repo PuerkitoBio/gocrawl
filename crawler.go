@@ -1,9 +1,7 @@
 package gocrawl
 
 import (
-	"github.com/PuerkitoBio/goquery"
 	"github.com/PuerkitoBio/purell"
-	"net/http"
 	"net/url"
 	"strings"
 	"sync"
@@ -37,17 +35,16 @@ type Crawler struct {
 	workers         map[string]*worker
 }
 
-// Crawler constructor with a pre-initialized Options object
+// Crawler constructor with a pre-initialized Options object.
 func NewCrawlerWithOptions(opts *Options) *Crawler {
 	ret := new(Crawler)
 	ret.Options = opts
 	return ret
 }
 
-// Crawler constructor with the visitor and selector callback functions
-func NewCrawler(visitor func(*http.Response, *goquery.Document) ([]*url.URL, bool),
-	filter func(*url.URL, *url.URL, bool) (bool, int)) *Crawler {
-	return NewCrawlerWithOptions(NewOptions(visitor, filter))
+// Crawler constructor with the specified extender object.
+func NewCrawler(ext Extender) *Crawler {
+	return NewCrawlerWithOptions(NewOptions(ext))
 }
 
 // Initialize the Crawler's internal fields before a crawling execution.

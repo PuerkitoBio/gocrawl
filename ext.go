@@ -27,8 +27,6 @@ const (
 	CekProcessLinks
 )
 
-var defaultClient = new(http.Client)
-
 type CrawlError struct {
 	SourceError error
 	ErrorKind   CrawlErrorKind
@@ -43,18 +41,18 @@ func (this CrawlError) Error() string {
 	return this.msg
 }
 
-func newCrawlError(e error, kind CrawlErrorKind, u *url.URL) error {
+func newCrawlError(e error, kind CrawlErrorKind, u *url.URL) *CrawlError {
 	return &CrawlError{e, kind, u, ""}
 }
 
-func newCrawlErrorMessage(msg string, kind CrawlErrorKind, u *url.URL) error {
+func newCrawlErrorMessage(msg string, kind CrawlErrorKind, u *url.URL) *CrawlError {
 	return &CrawlError{nil, kind, u, msg}
 }
 
 type Extender interface {
 	Start(seeds []string) []string
 	End(reason EndReason)
-	Error(err error)
+	Error(err *CrawlError)
 
 	ComputeDelay(host string, optsDelay time.Duration, robotsDelay time.Duration, lastFetch time.Duration) time.Duration
 	Fetch(u *url.URL, userAgent string) (res *http.Response, err error)
@@ -67,10 +65,7 @@ type Extender interface {
 	Disallowed(u *url.URL)
 }
 
-type DefaultExtender struct {
-	visitor func(*http.Response, *goquery.Document) (harvested []*url.URL, findLinks bool)
-	filter  func(u *url.URL, from *url.URL, isVisited bool) (enqueue bool, priority int)
-}
+type DefaultExtender struct{}
 
 // Return the same seeds as those received (those that were passed
 // to Run() initially).
@@ -83,7 +78,7 @@ func (this *DefaultExtender) End(reason EndReason) {}
 
 // Error is a no-op (logging is done automatically, regardless of the implementation
 // of the Error() hook).
-func (this *DefaultExtender) Error(err error) {}
+func (this *DefaultExtender) Error(err *CrawlError) {}
 
 // ComputeDelay returns the delay specified in the Crawler's Options, unless a
 // crawl-delay is specified in the robots.txt file, which has precedence.
@@ -104,7 +99,7 @@ func (this *DefaultExtender) Fetch(u *url.URL, userAgent string) (res *http.Resp
 		return nil, e
 	}
 	req.Header["User-Agent"] = []string{userAgent}
-	return defaultClient.Do(req)
+	return http.DefaultClient.Do(req)
 }
 
 // Ask the worker to actually request (fetch) the Robots.txt document.
@@ -114,9 +109,6 @@ func (this *DefaultExtender) RequestRobots(u *url.URL, robotAgent string) (reque
 
 // Enqueue the URL if it hasn't been visited yet.
 func (this *DefaultExtender) Filter(u *url.URL, from *url.URL, isVisited bool) (enqueue bool, priority int) {
-	if this.filter != nil {
-		return this.filter(u, from, isVisited)
-	}
 	return !isVisited, 0
 }
 
@@ -125,9 +117,6 @@ func (this *DefaultExtender) Enqueued(u *url.URL, from *url.URL) {}
 
 // Ask the worker to harvest the links in this page.
 func (this *DefaultExtender) Visit(res *http.Response, doc *goquery.Document) (harvested []*url.URL, findLinks bool) {
-	if this.visitor != nil {
-		return this.visitor(res, doc)
-	}
 	return nil, true
 }
 
