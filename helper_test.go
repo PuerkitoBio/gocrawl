@@ -110,10 +110,6 @@ func newSpyExtenderConfigured(visitDelay time.Duration, returnUrls []*url.URL, d
 	return newSpyExtender(v, f)
 }
 
-func (this *spyExtender) resetCallCounts() {
-	this.callCount = make(map[extensionMethodKey]int64, 11)
-}
-
 func (this *spyExtender) Visit(res *http.Response, doc *goquery.Document) ([]*url.URL, bool) {
 	this.callCount[eMKVisit]++
 	if this.v == nil {

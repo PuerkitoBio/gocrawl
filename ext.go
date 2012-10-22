@@ -7,14 +7,17 @@ import (
 	"time"
 )
 
+// Flag indicating why the crawler ended.
 type EndReason uint8
-type CrawlErrorKind uint8
 
 const (
 	ErDone EndReason = iota
 	ErMaxVisits
 	ErError
 )
+
+// Flag indicating the source of the crawl error.
+type CrawlErrorKind uint8
 
 const (
 	CekFetch CrawlErrorKind = iota
@@ -49,6 +52,7 @@ func newCrawlErrorMessage(msg string, kind CrawlErrorKind, u *url.URL) *CrawlErr
 	return &CrawlError{nil, kind, u, msg}
 }
 
+// Extension methods required to provide an extender instance.
 type Extender interface {
 	Start(seeds []string) []string
 	End(reason EndReason)
