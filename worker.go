@@ -167,7 +167,6 @@ func (this *worker) requestRobotsTxt(u *url.URL, delay time.Duration) {
 		wait := time.After(delay)
 
 		this.robotsGroup = this.getRobotsTxtGroup(nil, res)
-		this.extender.Visited(u, nil)
 
 		// Wait for crawl delay
 		<-wait

@@ -105,3 +105,48 @@ func TestReadBodyInVisitor(t *testing.T) {
 		t.Error("Empty body")
 	}
 }
+
+func TestEnqueuedCount(t *testing.T) {
+	opts := NewOptions(nil)
+	opts.SameHostOnly = true
+	opts.CrawlDelay = DefaultTestCrawlDelay
+	spy, _ := runFileFetcherWithOptions(opts, []string{"*"}, []string{"http://robota/page1.html"})
+
+	// page1 and robots.txt (did not visit page1, so page2 never found)
+	assertCallCount(spy, eMKEnqueued, 2, t)
+	// No visit per robots policy
+	assertCallCount(spy, eMKVisit, 0, t)
+}
+
+func TestVisitedCount(t *testing.T) {
+	opts := NewOptions(nil)
+	opts.SameHostOnly = true
+	opts.CrawlDelay = DefaultTestCrawlDelay
+	spy, _ := runFileFetcherWithOptions(opts, []string{"*"}, []string{"http://hosta/page1.html"})
+
+	assertCallCount(spy, eMKVisited, 3, t)
+}
+
+type startExtender struct {
+	*spyExtender
+}
+
+func (this *startExtender) Start(seeds []string) []string {
+	this.incCallCount(eMKStart, 1)
+	return append(seeds, "http://hostb/page1.html")
+}
+
+func TestStartExtender(t *testing.T) {
+	spy := &startExtender{newSpyExtender(nil, nil)}
+	opts := NewOptions(nil)
+	opts.SameHostOnly = true
+	opts.CrawlDelay = DefaultTestCrawlDelay
+	opts.Extender = spy
+	c := NewCrawlerWithOptions(opts)
+	c.Run("http://hostc/page1.html")
+
+	assertCallCount(spy, eMKStart, 1, t)
+	assertCallCount(spy, eMKVisit, 4, t)
+	// Page1-2 for both, robots a-b, page unknown
+	assertCallCount(spy, eMKEnqueued, 7, t)
+}

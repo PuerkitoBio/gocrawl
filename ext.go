@@ -61,6 +61,7 @@ type Extender interface {
 	ComputeDelay(host string, optsDelay time.Duration, robotsDelay time.Duration, lastFetch time.Duration) time.Duration
 	Fetch(u *url.URL, userAgent string) (res *http.Response, err error)
 	RequestRobots(u *url.URL, robotAgent string) (request bool, data []byte)
+	// TODO : Add a FetchedRobots() method?
 
 	Filter(u *url.URL, from *url.URL, isVisited bool) (enqueue bool, priority int)
 	Enqueued(u *url.URL, from *url.URL)
