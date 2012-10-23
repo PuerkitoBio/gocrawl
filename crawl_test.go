@@ -136,3 +136,22 @@ func TestStartExtender(t *testing.T) {
 	// Page1-2 for both, robots a-b, page unknown
 	assertCallCount(spy, eMKEnqueued, 7, t)
 }
+
+func TestEndReason(t *testing.T) {
+	var e EndReason
+
+	spy := newSpyExtenderFunc(eMKEnd, func(end EndReason) {
+		e = end
+	})
+	opts := NewOptions(spy)
+	opts.SameHostOnly = true
+	opts.CrawlDelay = DefaultTestCrawlDelay
+	opts.MaxVisits = 1
+	c := NewCrawlerWithOptions(opts)
+	c.Run("http://hosta/page1.html")
+
+	assertCallCount(spy, eMKEnd, 1, t)
+	if e != ErMaxVisits {
+		t.Fatalf("Expected end reason MaxVisits, got %v\n", e)
+	}
+}
