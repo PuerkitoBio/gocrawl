@@ -208,6 +208,8 @@ func (this *Crawler) enqueueUrls(res *workerResponse) (cnt int) {
 			this.pushPopRefCount++
 
 			// Once it is stacked, it WILL be visited eventually, so add it to the visited slice
+			// (unless denied by robots.txt, but this is out of our hands, for all we
+			// care, it is visited).
 			if !isVisited {
 				this.visited[u.String()] = '0'
 			}

@@ -1,8 +1,10 @@
 package gocrawl
 
 import (
+	"bytes"
 	"github.com/PuerkitoBio/goquery"
 	"io/ioutil"
+	"log"
 	"net/http"
 	"net/url"
 	"testing"
@@ -137,7 +139,7 @@ func TestStartExtender(t *testing.T) {
 	assertCallCount(spy, eMKEnqueued, 7, t)
 }
 
-func TestEndReason(t *testing.T) {
+func TestEndReasonMaxVisits(t *testing.T) {
 	var e EndReason
 
 	spy := newSpyExtenderFunc(eMKEnd, func(end EndReason) {
@@ -154,4 +156,60 @@ func TestEndReason(t *testing.T) {
 	if e != ErMaxVisits {
 		t.Fatalf("Expected end reason MaxVisits, got %v\n", e)
 	}
+}
+
+func TestEndReasonDone(t *testing.T) {
+	var e EndReason
+
+	spy := newSpyExtenderFunc(eMKEnd, func(end EndReason) {
+		e = end
+	})
+	opts := NewOptions(spy)
+	opts.SameHostOnly = true
+	opts.CrawlDelay = DefaultTestCrawlDelay
+	c := NewCrawlerWithOptions(opts)
+	c.Run("http://hosta/page5.html")
+
+	assertCallCount(spy, eMKEnd, 1, t)
+	if e != ErDone {
+		t.Fatalf("Expected end reason Done, got %v\n", e)
+	}
+}
+
+func TestErrorFetch(t *testing.T) {
+	var e *CrawlError
+
+	spy := newSpyExtenderFunc(eMKError, func(err *CrawlError) {
+		e = err
+	})
+	opts := NewOptions(spy)
+	opts.SameHostOnly = true
+	opts.CrawlDelay = DefaultTestCrawlDelay
+	c := NewCrawlerWithOptions(opts)
+	c.Run("http://hostb/page1.html")
+
+	assertCallCount(spy, eMKError, 1, t)
+	if e.ErrorKind != CekFetch {
+		t.Fatalf("Expected error kind Fetch, got %v\n", e.ErrorKind)
+	}
+}
+
+func TestComputeDelay(t *testing.T) {
+	b := new(bytes.Buffer)
+
+	spy := newSpyExtenderFunc(eMKComputeDelay, func(host string, optsDelay time.Duration, robotsDelay time.Duration, lastFetch time.Duration) time.Duration {
+		return 17 * time.Millisecond
+	})
+
+	opts := NewOptions(spy)
+	opts.SameHostOnly = true
+	opts.CrawlDelay = DefaultTestCrawlDelay
+	opts.Logger = log.New(b, "", 0)
+	opts.LogFlags = LogError | LogInfo
+	opts.MaxVisits = 2
+	c := NewCrawlerWithOptions(opts)
+	c.Run("http://hosta/page1.html")
+
+	assertCallCount(spy, eMKComputeDelay, 3, t)
+	assertIsInLog(*b, "using crawl-delay: 17ms\n", t)
 }
