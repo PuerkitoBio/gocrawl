@@ -79,29 +79,23 @@ func TestIdleTimeOut(t *testing.T) {
 	assertIsInLog(*b, "worker for host hostunknown cleared on idle policy\n", t)
 }
 
-type bodyExtender struct {
-	fileFetcherExtender
-
-	err error
-	b   []byte
-}
-
-func (this *bodyExtender) Visit(res *http.Response, doc *goquery.Document) ([]*url.URL, bool) {
-	this.b, this.err = ioutil.ReadAll(res.Body)
-	return nil, false
-}
-
 func TestReadBodyInVisitor(t *testing.T) {
-	var be = new(bodyExtender)
-	c := NewCrawler(be)
+	var err error
+	var b []byte
 
+	spy := newSpyExtenderFunc(eMKVisit, func(res *http.Response, doc *goquery.Document) ([]*url.URL, bool) {
+		b, err = ioutil.ReadAll(res.Body)
+		return nil, false
+	})
+
+	c := NewCrawler(spy)
 	c.Options.CrawlDelay = DefaultTestCrawlDelay
 	c.Options.LogFlags = LogAll
 	c.Run("http://hostc/page3.html")
 
-	if be.err != nil {
-		t.Error(be.err)
-	} else if len(be.b) == 0 {
+	if err != nil {
+		t.Error(err)
+	} else if len(b) == 0 {
 		t.Error("Empty body")
 	}
 }
@@ -127,21 +121,13 @@ func TestVisitedCount(t *testing.T) {
 	assertCallCount(spy, eMKVisited, 3, t)
 }
 
-type startExtender struct {
-	*spyExtender
-}
-
-func (this *startExtender) Start(seeds []string) []string {
-	this.incCallCount(eMKStart, 1)
-	return append(seeds, "http://hostb/page1.html")
-}
-
 func TestStartExtender(t *testing.T) {
-	spy := &startExtender{newSpyExtender(nil, nil)}
-	opts := NewOptions(nil)
+	spy := newSpyExtenderFunc(eMKStart, func(seeds []string) []string {
+		return append(seeds, "http://hostb/page1.html")
+	})
+	opts := NewOptions(spy)
 	opts.SameHostOnly = true
 	opts.CrawlDelay = DefaultTestCrawlDelay
-	opts.Extender = spy
 	c := NewCrawlerWithOptions(opts)
 	c.Run("http://hostc/page1.html")
 

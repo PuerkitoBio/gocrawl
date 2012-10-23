@@ -76,9 +76,7 @@ func (this *fileFetcherExtender) Fetch(u *url.URL, userAgent string) (*http.Resp
 type spyExtender struct {
 	fileFetcherExtender
 	callCount map[extensionMethodKey]int64
-
-	v func(*http.Response, *goquery.Document) ([]*url.URL, bool)
-	f func(*url.URL, *url.URL, bool) (bool, int)
+	methods   map[extensionMethodKey]interface{}
 }
 
 type callCounter interface {
@@ -96,7 +94,26 @@ func (this *spyExtender) incCallCount(key extensionMethodKey, delta int64) {
 
 func newSpyExtender(v func(*http.Response, *goquery.Document) ([]*url.URL, bool),
 	f func(*url.URL, *url.URL, bool) (bool, int)) *spyExtender {
-	return &spyExtender{fileFetcherExtender{}, make(map[extensionMethodKey]int64, 11), v, f}
+	spy := &spyExtender{fileFetcherExtender{}, make(map[extensionMethodKey]int64, 11), make(map[extensionMethodKey]interface{}, 2)}
+	if v != nil {
+		spy.setExtensionMethod(eMKVisit, v)
+	}
+	if f != nil {
+		spy.setExtensionMethod(eMKFilter, f)
+	}
+	return spy
+}
+
+func newSpyExtenderFunc(key extensionMethodKey, f interface{}) *spyExtender {
+	spy := newSpyExtender(nil, nil)
+	if f != nil {
+		spy.setExtensionMethod(key, f)
+	}
+	return spy
+}
+
+func (this *spyExtender) setExtensionMethod(key extensionMethodKey, f interface{}) {
+	this.methods[key] = f
 }
 
 func newSpyExtenderConfigured(visitDelay time.Duration, returnUrls []*url.URL, doLinks bool,
@@ -125,55 +142,88 @@ func newSpyExtenderConfigured(visitDelay time.Duration, returnUrls []*url.URL, d
 
 func (this *spyExtender) Visit(res *http.Response, doc *goquery.Document) ([]*url.URL, bool) {
 	this.incCallCount(eMKVisit, 1)
-	if this.v == nil {
-		return this.fileFetcherExtender.Visit(res, doc)
+	if f, ok := this.methods[eMKVisit].(func(res *http.Response, doc *goquery.Document) ([]*url.URL, bool)); ok {
+		return f(res, doc)
 	}
-	return this.v(res, doc)
+	return this.fileFetcherExtender.Visit(res, doc)
 }
 
 func (this *spyExtender) Filter(target *url.URL, origin *url.URL, isVisited bool) (bool, int) {
 	this.incCallCount(eMKFilter, 1)
-	if this.f == nil {
-		return this.fileFetcherExtender.Filter(target, origin, isVisited)
+	if f, ok := this.methods[eMKFilter].(func(target *url.URL, origin *url.URL, isVisited bool) (bool, int)); ok {
+		return f(target, origin, isVisited)
 	}
-	return this.f(target, origin, isVisited)
+	return this.fileFetcherExtender.Filter(target, origin, isVisited)
 }
 
 func (this *spyExtender) Start(seeds []string) []string {
 	this.incCallCount(eMKStart, 1)
+	if f, ok := this.methods[eMKStart].(func(seeds []string) []string); ok {
+		return f(seeds)
+	}
 	return this.fileFetcherExtender.Start(seeds)
 }
 func (this *spyExtender) End(reason EndReason) {
 	this.incCallCount(eMKEnd, 1)
+	if f, ok := this.methods[eMKEnd].(func(reason EndReason)); ok {
+		f(reason)
+		return
+	}
 	this.fileFetcherExtender.End(reason)
 }
 func (this *spyExtender) Error(err *CrawlError) {
 	this.incCallCount(eMKError, 1)
+	if f, ok := this.methods[eMKError].(func(err *CrawlError)); ok {
+		f(err)
+		return
+	}
 	this.fileFetcherExtender.Error(err)
 }
 func (this *spyExtender) ComputeDelay(host string, optsDelay time.Duration,
 	robotsDelay time.Duration, lastFetch time.Duration) time.Duration {
 	this.incCallCount(eMKComputeDelay, 1)
+	if f, ok := this.methods[eMKComputeDelay].(func(host string, optsDelay time.Duration,
+		robotsDelay time.Duration, lastFetch time.Duration) time.Duration); ok {
+		return f(host, optsDelay, robotsDelay, lastFetch)
+	}
 	return this.fileFetcherExtender.ComputeDelay(host, optsDelay, robotsDelay, lastFetch)
 }
 func (this *spyExtender) Fetch(u *url.URL, userAgent string) (res *http.Response, err error) {
 	this.incCallCount(eMKFetch, 1)
+	if f, ok := this.methods[eMKFetch].(func(u *url.URL, userAgent string) (res *http.Response, err error)); ok {
+		return f(u, userAgent)
+	}
 	return this.fileFetcherExtender.Fetch(u, userAgent)
 }
 func (this *spyExtender) RequestRobots(u *url.URL, robotAgent string) (request bool, data []byte) {
 	this.incCallCount(eMKRequestRobots, 1)
+	if f, ok := this.methods[eMKRequestRobots].(func(u *url.URL, robotAgent string) (request bool, data []byte)); ok {
+		return f(u, robotAgent)
+	}
 	return this.fileFetcherExtender.RequestRobots(u, robotAgent)
 }
 func (this *spyExtender) Enqueued(u *url.URL, from *url.URL) {
 	this.incCallCount(eMKEnqueued, 1)
+	if f, ok := this.methods[eMKEnqueued].(func(u *url.URL, from *url.URL)); ok {
+		f(u, from)
+		return
+	}
 	this.fileFetcherExtender.Enqueued(u, from)
 }
 func (this *spyExtender) Visited(u *url.URL, harvested []*url.URL) {
 	this.incCallCount(eMKVisited, 1)
+	if f, ok := this.methods[eMKVisited].(func(u *url.URL, harvested []*url.URL)); ok {
+		f(u, harvested)
+		return
+	}
 	this.fileFetcherExtender.Visited(u, harvested)
 }
 func (this *spyExtender) Disallowed(u *url.URL) {
 	this.incCallCount(eMKDisallowed, 1)
+	if f, ok := this.methods[eMKDisallowed].(func(u *url.URL)); ok {
+		f(u)
+		return
+	}
 	this.fileFetcherExtender.Disallowed(u)
 }
 

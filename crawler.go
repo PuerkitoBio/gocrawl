@@ -64,17 +64,14 @@ func (this *Crawler) init(seeds []string) []*url.URL {
 
 	// Initialize the visits fields
 	this.visited = make(map[string]byte, l)
-	this.pushPopRefCount = 0
-	this.visits = 0
+	this.pushPopRefCount, this.visits = 0, 0
 
 	// Create the workers map and the push channel (the channel used by workers
 	// to communicate back to the crawler)
 	if this.Options.SameHostOnly {
-		this.workers = make(map[string]*worker, hostCount)
-		this.push = make(chan *workerResponse, hostCount)
+		this.workers, this.push = make(map[string]*worker, hostCount), make(chan *workerResponse, hostCount)
 	} else {
-		this.workers = make(map[string]*worker, 10*hostCount)
-		this.push = make(chan *workerResponse, 10*hostCount)
+		this.workers, this.push = make(map[string]*worker, 10*hostCount), make(chan *workerResponse, 10*hostCount)
 	}
 
 	return parsedSeeds
@@ -125,8 +122,7 @@ func (this *Crawler) parseSeeds(seeds []string) ([]*url.URL, int) {
 func (this *Crawler) launchWorker(u *url.URL) *worker {
 	// Initialize index and channels
 	i := len(this.workers) + 1
-	pop := newPopChannel()
-	stop := make(chan bool, 1)
+	pop, stop := newPopChannel(), make(chan bool, 1)
 
 	// Create the worker
 	w := &worker{

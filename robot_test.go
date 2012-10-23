@@ -1,6 +1,7 @@
 package gocrawl
 
 import (
+	"net/url"
 	"testing"
 )
 
@@ -59,4 +60,22 @@ func TestRobotCrawlDelay(t *testing.T) {
 	assertCallCount(spy, eMKVisit, 4, t)
 	assertCallCount(spy, eMKFilter, 5, t)
 	assertIsInLog(*b, "using crawl-delay: 200ms\n", t)
+}
+
+func TestCachedRobot(t *testing.T) {
+	spy := newSpyExtenderFunc(eMKRequestRobots, func(u *url.URL, robotAgent string) (request bool, data []byte) {
+		return false, []byte("User-agent: *\nDisallow:/page2.html")
+	})
+
+	opts := NewOptions(spy)
+	opts.SameHostOnly = true
+	opts.CrawlDelay = DefaultTestCrawlDelay
+	opts.LogFlags = LogError | LogInfo
+	c := NewCrawlerWithOptions(opts)
+	c.Run("http://robota/page1.html")
+
+	assertCallCount(spy, eMKVisit, 1, t)
+	assertCallCount(spy, eMKEnqueued, 3, t)
+	assertCallCount(spy, eMKRequestRobots, 1, t)
+	assertCallCount(spy, eMKDisallowed, 1, t)
 }
