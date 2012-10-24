@@ -1,6 +1,8 @@
 package gocrawl
 
 import (
+	"io/ioutil"
+	"net/http"
 	"net/url"
 	"testing"
 )
@@ -78,4 +80,30 @@ func TestCachedRobot(t *testing.T) {
 	assertCallCount(spy, eMKEnqueued, 3, t)
 	assertCallCount(spy, eMKRequestRobots, 1, t)
 	assertCallCount(spy, eMKDisallowed, 1, t)
+}
+
+func TestFetchedRobot(t *testing.T) {
+	var err error
+	var b []byte
+
+	spy := newSpyExtenderFunc(eMKFetchedRobots, func(res *http.Response) {
+		b, err = ioutil.ReadAll(res.Body)
+	})
+
+	opts := NewOptions(spy)
+	opts.SameHostOnly = true
+	opts.CrawlDelay = DefaultTestCrawlDelay
+	opts.LogFlags = LogError | LogInfo
+	c := NewCrawlerWithOptions(opts)
+	c.Run("http://robotc/page4.html")
+
+	assertCallCount(spy, eMKRequestRobots, 1, t)
+	assertCallCount(spy, eMKEnqueued, 2, t)
+	assertCallCount(spy, eMKFetchedRobots, 1, t)
+
+	if err != nil {
+		t.Error(err)
+	} else if len(b) == 0 {
+		t.Error("Empty body in fetched robots")
+	}
 }

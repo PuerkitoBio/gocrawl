@@ -132,10 +132,17 @@ func (this *worker) getRobotsTxtGroup(b []byte, res *http.Response) (g *robotstx
 	var data *robotstxt.RobotsData
 	var e error
 
-	if b != nil {
+	if res != nil {
+		// Get the bytes from the response body
+		b, e = ioutil.ReadAll(res.Body)
+		// Rewind the res.Body (by re-creating it from the bytes)
+		res.Body = ioutil.NopCloser(bytes.NewBuffer(b))
+		// Error or not, the robots.txt has been fetched, so notify
+		this.extender.FetchedRobots(res)
+	}
+
+	if e == nil {
 		data, e = robotstxt.FromBytes(b)
-	} else {
-		data, e = robotstxt.FromResponse(res)
 	}
 
 	// If robots data cannot be parsed, will return nil, which will allow access by default.

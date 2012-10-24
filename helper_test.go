@@ -27,11 +27,13 @@ const (
 	eMKComputeDelay
 	eMKFetch
 	eMKRequestRobots
+	eMKFetchedRobots
 	eMKFilter
 	eMKEnqueued
 	eMKVisit
 	eMKVisited
 	eMKDisallowed
+	eMKLast
 )
 
 // The file fetcher, that loads URLs from files in the testdata/ directory.
@@ -94,7 +96,7 @@ func (this *spyExtender) incCallCount(key extensionMethodKey, delta int64) {
 
 func newSpyExtender(v func(*http.Response, *goquery.Document) ([]*url.URL, bool),
 	f func(*url.URL, *url.URL, bool) (bool, int)) *spyExtender {
-	spy := &spyExtender{fileFetcherExtender{}, make(map[extensionMethodKey]int64, 11), make(map[extensionMethodKey]interface{}, 2)}
+	spy := &spyExtender{fileFetcherExtender{}, make(map[extensionMethodKey]int64, eMKLast), make(map[extensionMethodKey]interface{}, 2)}
 	if v != nil {
 		spy.setExtensionMethod(eMKVisit, v)
 	}
@@ -201,6 +203,14 @@ func (this *spyExtender) RequestRobots(u *url.URL, robotAgent string) (request b
 		return f(u, robotAgent)
 	}
 	return this.fileFetcherExtender.RequestRobots(u, robotAgent)
+}
+func (this *spyExtender) FetchedRobots(res *http.Response) {
+	this.incCallCount(eMKFetchedRobots, 1)
+	if f, ok := this.methods[eMKFetchedRobots].(func(res *http.Response)); ok {
+		f(res)
+		return
+	}
+	this.fileFetcherExtender.FetchedRobots(res)
 }
 func (this *spyExtender) Enqueued(u *url.URL, from *url.URL) {
 	this.incCallCount(eMKEnqueued, 1)

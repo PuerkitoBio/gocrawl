@@ -173,6 +173,8 @@ This last option field, `Extender`, is crucial in using gocrawl, so here are the
 
 *    **RequestRobots** : `RequestRobots(u *url.URL, robotAgent string) (request bool, data []byte)`. Asks whether the robots.txt URL should be fetched. If `false` is returned as first value, the `data` value is considered to be the robots.txt cached content, and is used as such. The `DefaultExtender.RequestRobots` implementation returns `true, nil`.
 
+*    **FetchedRobots** : `FetchedRobots(res *http.Response)`. Called when the robots.txt URL has been fetched from the host.
+
 *    **Filter** : `Filter(u *url.URL, from *url.URL, isVisited bool) (enqueue bool, priority int)`. Called when deciding if a URL should be enqueued for visiting. It receives the target `*url.URL` link, the source `*url.URL` link (where this URL was found, `nil` for the seeds), and a `bool` is visited flag, indicating if this URL has already been visited in this crawling execution. It returns a `bool` flag ordering gocrawl to visit (`true`) or ignore (`false`) the URL, and a priority value, **ignored at the moment**. However, even if the function returns true, the URL must still comply to these rules:
 
 1. It must be an absolute URL 

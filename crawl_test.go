@@ -7,6 +7,7 @@ import (
 	"log"
 	"net/http"
 	"net/url"
+	"strings"
 	"testing"
 	"time"
 )
@@ -212,4 +213,24 @@ func TestComputeDelay(t *testing.T) {
 
 	assertCallCount(spy, eMKComputeDelay, 3, t)
 	assertIsInLog(*b, "using crawl-delay: 17ms\n", t)
+}
+
+func TestFilter(t *testing.T) {
+	b := new(bytes.Buffer)
+
+	spy := newSpyExtenderFunc(eMKFilter, func(u *url.URL, from *url.URL, isVisited bool) (enqueue bool, priority int) {
+		return strings.HasSuffix(u.Path, "page1.html"), 0
+	})
+
+	opts := NewOptions(spy)
+	opts.SameHostOnly = true
+	opts.CrawlDelay = DefaultTestCrawlDelay
+	opts.Logger = log.New(b, "", 0)
+	opts.LogFlags = LogError | LogIgnored
+	c := NewCrawlerWithOptions(opts)
+	c.Run("http://hostc/page1.html")
+
+	assertCallCount(spy, eMKFilter, 3, t)
+	assertCallCount(spy, eMKEnqueued, 2, t) // robots.txt triggers Enqueued too
+	assertIsInLog(*b, "ignore on filter policy: http://hostc/page2.html\n", t)
 }

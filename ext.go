@@ -61,7 +61,7 @@ type Extender interface {
 	ComputeDelay(host string, optsDelay time.Duration, robotsDelay time.Duration, lastFetch time.Duration) time.Duration
 	Fetch(u *url.URL, userAgent string) (res *http.Response, err error)
 	RequestRobots(u *url.URL, robotAgent string) (request bool, data []byte)
-	// TODO : Add a FetchedRobots() method?
+	FetchedRobots(res *http.Response)
 
 	Filter(u *url.URL, from *url.URL, isVisited bool) (enqueue bool, priority int)
 	Enqueued(u *url.URL, from *url.URL)
@@ -111,6 +111,9 @@ func (this *DefaultExtender) Fetch(u *url.URL, userAgent string) (res *http.Resp
 func (this *DefaultExtender) RequestRobots(u *url.URL, robotAgent string) (request bool, data []byte) {
 	return true, nil
 }
+
+// FetchedRobots is a no-op.
+func (this *DefaultExtender) FetchedRobots(res *http.Response) {}
 
 // Enqueue the URL if it hasn't been visited yet.
 func (this *DefaultExtender) Filter(u *url.URL, from *url.URL, isVisited bool) (enqueue bool, priority int) {
