@@ -24,6 +24,7 @@ type Options struct {
 	CrawlDelay            time.Duration // Applied per host
 	WorkerIdleTTL         time.Duration
 	SameHostOnly          bool
+	HeadBeforeGet         bool
 	URLNormalizationFlags purell.NormalizationFlags
 	Logger                *log.Logger
 	LogFlags              LogFlags
@@ -38,6 +39,7 @@ func NewOptions(ext Extender) *Options {
 		DefaultCrawlDelay,
 		DefaultIdleTTL,
 		true,
+		false,
 		DefaultNormalizationFlags,
 		log.New(os.Stdout, "gocrawl ", log.LstdFlags|log.Lmicroseconds),
 		LogError,

@@ -30,16 +30,24 @@ const (
 	CekProcessLinks
 )
 
+type HeadRequestMode uint8
+
+const (
+	HrmDefault HeadRequestMode = iota
+	HrmRequest
+	HrmIgnore
+)
+
 type CrawlError struct {
-	SourceError error
-	ErrorKind   CrawlErrorKind
-	URL         *url.URL
-	msg         string
+	Err  error
+	Kind CrawlErrorKind
+	URL  *url.URL
+	msg  string
 }
 
 func (this CrawlError) Error() string {
-	if this.SourceError != nil {
-		return this.SourceError.Error()
+	if this.Err != nil {
+		return this.Err.Error()
 	}
 	return this.msg
 }
@@ -59,11 +67,12 @@ type Extender interface {
 	Error(err *CrawlError)
 
 	ComputeDelay(host string, optsDelay time.Duration, robotsDelay time.Duration, lastFetch time.Duration) time.Duration
-	Fetch(u *url.URL, userAgent string) (res *http.Response, err error)
+	Fetch(u *url.URL, userAgent string, headRequest bool) (res *http.Response, err error)
+	RequestGet(headRes *http.Response) bool
 	RequestRobots(u *url.URL, robotAgent string) (request bool, data []byte)
 	FetchedRobots(res *http.Response)
 
-	Filter(u *url.URL, from *url.URL, isVisited bool) (enqueue bool, priority int)
+	Filter(u *url.URL, from *url.URL, isVisited bool) (enqueue bool, priority int, headRequest HeadRequestMode)
 	Enqueued(u *url.URL, from *url.URL)
 	Visit(*http.Response, *goquery.Document) (harvested []*url.URL, findLinks bool)
 	Visited(u *url.URL, harvested []*url.URL)
@@ -97,14 +106,26 @@ func (this *DefaultExtender) ComputeDelay(host string, optsDelay time.Duration,
 
 // Fetch requests the specified URL using the given user agent string. It uses
 // Go's default http Client instance.
-func (this *DefaultExtender) Fetch(u *url.URL, userAgent string) (res *http.Response, err error) {
+func (this *DefaultExtender) Fetch(u *url.URL, userAgent string, headRequest bool) (res *http.Response, err error) {
+	var reqType string
+
 	// Prepare the request with the right user agent
-	req, e := http.NewRequest("GET", u.String(), nil)
+	if headRequest {
+		reqType = "HEAD"
+	} else {
+		reqType = "GET"
+	}
+	req, e := http.NewRequest(reqType, u.String(), nil)
 	if e != nil {
 		return nil, e
 	}
 	req.Header["User-Agent"] = []string{userAgent}
 	return http.DefaultClient.Do(req)
+}
+
+// Ask the worker to actually request the URL's body (issue a GET).
+func (this *DefaultExtender) RequestGet(headRes *http.Response) bool {
+	return true
 }
 
 // Ask the worker to actually request (fetch) the Robots.txt document.
@@ -116,8 +137,8 @@ func (this *DefaultExtender) RequestRobots(u *url.URL, robotAgent string) (reque
 func (this *DefaultExtender) FetchedRobots(res *http.Response) {}
 
 // Enqueue the URL if it hasn't been visited yet.
-func (this *DefaultExtender) Filter(u *url.URL, from *url.URL, isVisited bool) (enqueue bool, priority int) {
-	return !isVisited, 0
+func (this *DefaultExtender) Filter(u *url.URL, from *url.URL, isVisited bool) (enqueue bool, priority int, headRequest HeadRequestMode) {
+	return !isVisited, 0, HrmDefault
 }
 
 // Enqueued is a no-op.
