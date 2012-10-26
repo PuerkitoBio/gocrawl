@@ -40,7 +40,8 @@ type worker struct {
 	logFunc  func(LogFlags, string, ...interface{})
 
 	// Implementation fields
-	lastFetchDuration time.Duration
+	lastFetch      *FetchInfo
+	lastCrawlDelay time.Duration
 }
 
 // Start crawling the host.
@@ -75,27 +76,30 @@ func (this *worker) run() {
 
 			// Got a batch of urls to crawl, loop and check at each iteration if a stop 
 			// is received.
-			for _, u := range batch {
+			for _, cmd := range batch {
 				var robDelay time.Duration
 
-				this.logFunc(LogInfo, "popped: %s\n", u.String())
+				this.logFunc(LogInfo, "popped: %s\n", cmd.u.String())
 
 				// Get the crawl delay between this request and the next
 				if this.robotsGroup != nil {
 					robDelay = this.robotsGroup.CrawlDelay
 				}
-				crawlDelay := this.extender.ComputeDelay(this.host, this.crawlDelay,
-					robDelay, this.lastFetchDuration)
-				this.logFunc(LogInfo, "using crawl-delay: %v\n", crawlDelay)
+				this.lastCrawlDelay = this.extender.ComputeDelay(this.host,
+					&DelayInfo{this.crawlDelay,
+						robDelay,
+						this.lastCrawlDelay},
+					this.lastFetch)
+				this.logFunc(LogInfo, "using crawl-delay: %v\n", this.lastCrawlDelay)
 
-				if isRobotsTxtUrl(u) {
-					this.requestRobotsTxt(u, crawlDelay)
-				} else if this.isAllowedPerRobotsPolicies(u) {
-					this.requestUrl(u, crawlDelay)
+				if isRobotsTxtUrl(cmd.u) {
+					this.requestRobotsTxt(cmd.u, this.lastCrawlDelay)
+				} else if this.isAllowedPerRobotsPolicies(cmd.u) {
+					this.requestUrl(cmd.u, this.lastCrawlDelay)
 				} else {
 					// Must still notify Crawler that this URL was processed, although not visited
-					this.extender.Disallowed(u)
-					this.sendResponse(u, false, nil, false)
+					this.extender.Disallowed(cmd.u)
+					this.sendResponse(cmd.u, false, nil, false)
 				}
 
 				// No need to check for idle timeout here, no idling while looping through
@@ -188,7 +192,10 @@ func (this *worker) fetchUrl(u *url.URL, agent string) (res *http.Response, ok b
 	now := time.Now()
 
 	// Request the URL
-	if res, e = this.extender.Fetch(u, agent); e != nil {
+	if res, e = this.extender.Fetch(u, agent, false); e != nil {
+		// No fetch, so set to nil
+		this.lastFetch = nil
+
 		// Notify error
 		this.extender.Error(newCrawlError(e, CekFetch, u))
 		this.logFunc(LogError, "ERROR fetching %s: %s\n", u.String(), e.Error())
@@ -196,8 +203,7 @@ func (this *worker) fetchUrl(u *url.URL, agent string) (res *http.Response, ok b
 		// Return from this URL crawl
 		this.sendResponse(u, false, nil, false)
 	} else {
-		// Get actual duration of the fetch
-		this.lastFetchDuration = now.Sub(time.Now())
+		this.lastFetch = &FetchInfo{now.Sub(time.Now()), res.StatusCode, false, isRobotsTxtUrl(u)}
 		ok = true
 	}
 	return
@@ -237,7 +243,7 @@ func (this *worker) sendResponse(u *url.URL, visited bool, harvested []*url.URL,
 	// Push harvested urls back to crawler, even if empty (uses the channel communication
 	// to decrement reference count of pending URLs)
 	if !isRobotsTxtUrl(u) {
-		res := &workerResponse{this.host, u, visited, harvested, idleDeath}
+		res := &workerResponse{this.host, visited, u, harvested, idleDeath}
 		this.push <- res
 	}
 }

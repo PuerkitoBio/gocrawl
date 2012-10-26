@@ -10,11 +10,18 @@ import (
 
 // Communication from worker to the master crawler
 type workerResponse struct {
-	host          string
+	host    string
+	visited bool
+
 	sourceUrl     *url.URL
-	visited       bool
 	harvestedUrls []*url.URL
-	idleDeath     bool
+
+	idleDeath bool
+}
+
+type workerCommand struct {
+	u    *url.URL
+	head bool
 }
 
 // The crawler itself, the master of the whole process
@@ -85,7 +92,7 @@ func (this *Crawler) Run(seeds ...string) {
 	parsedSeeds := this.init(seeds)
 
 	// Start with the seeds, and loop till death
-	this.enqueueUrls(&workerResponse{"", nil, false, parsedSeeds, false})
+	this.enqueueUrls(&workerResponse{"", false, nil, parsedSeeds, false})
 	this.collectUrls()
 
 	this.Options.Extender.End(this.endReason)
@@ -139,6 +146,7 @@ func (this *Crawler) launchWorker(u *url.URL) *worker {
 		nil,
 		this.Options.Extender,
 		getLogFunc(this.Options.Logger, this.Options.LogFlags, i),
+		nil,
 		0}
 
 	// Increment wait group count
@@ -163,7 +171,7 @@ func (this *Crawler) enqueueUrls(res *workerResponse) (cnt int) {
 		_, isVisited = this.visited[u.String()]
 
 		// Filter the URL - TODO : Priority is ignored at the moment
-		if enqueue, _ = this.Options.Extender.Filter(u, res.sourceUrl, isVisited); !enqueue {
+		if enqueue, _, _ = this.Options.Extender.Filter(u, res.sourceUrl, isVisited); !enqueue {
 			// Filter said NOT to use this url, so continue with next
 			this.logFunc(LogIgnored, "ignore on filter policy: %s\n", u.String())
 			continue
@@ -197,14 +205,14 @@ func (this *Crawler) enqueueUrls(res *workerResponse) (cnt int) {
 				} else {
 					this.logFunc(LogEnqueued, "enqueue: %s\n", robUrl.String())
 					this.Options.Extender.Enqueued(robUrl, res.sourceUrl)
-					w.pop.stack(robUrl)
+					w.pop.stack(&workerCommand{robUrl, false})
 				}
 			}
 
 			cnt++
 			this.logFunc(LogEnqueued, "enqueue: %s\n", u.String())
 			this.Options.Extender.Enqueued(u, res.sourceUrl)
-			w.pop.stack(u)
+			w.pop.stack(&workerCommand{u, false})
 			this.pushPopRefCount++
 
 			// Once it is stacked, it WILL be visited eventually, so add it to the visited slice

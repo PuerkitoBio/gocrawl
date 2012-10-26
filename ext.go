@@ -60,13 +60,26 @@ func newCrawlErrorMessage(msg string, kind CrawlErrorKind, u *url.URL) *CrawlErr
 	return &CrawlError{nil, kind, u, msg}
 }
 
+type DelayInfo struct {
+	OptsDelay   time.Duration
+	RobotsDelay time.Duration
+	LastDelay   time.Duration
+}
+
+type FetchInfo struct {
+	Duration      time.Duration
+	StatusCode    int
+	HeadRequest   bool
+	RobotsRequest bool
+}
+
 // Extension methods required to provide an extender instance.
 type Extender interface {
 	Start(seeds []string) []string
 	End(reason EndReason)
 	Error(err *CrawlError)
 
-	ComputeDelay(host string, optsDelay time.Duration, robotsDelay time.Duration, lastFetch time.Duration) time.Duration
+	ComputeDelay(host string, di *DelayInfo, lastFetch *FetchInfo) time.Duration
 	Fetch(u *url.URL, userAgent string, headRequest bool) (res *http.Response, err error)
 	RequestGet(headRes *http.Response) bool
 	RequestRobots(u *url.URL, robotAgent string) (request bool, data []byte)
@@ -96,12 +109,11 @@ func (this *DefaultExtender) Error(err *CrawlError) {}
 
 // ComputeDelay returns the delay specified in the Crawler's Options, unless a
 // crawl-delay is specified in the robots.txt file, which has precedence.
-func (this *DefaultExtender) ComputeDelay(host string, optsDelay time.Duration,
-	robotsDelay time.Duration, lastFetch time.Duration) time.Duration {
-	if robotsDelay > 0 {
-		return robotsDelay
+func (this *DefaultExtender) ComputeDelay(host string, di *DelayInfo, lastFetch *FetchInfo) time.Duration {
+	if di.RobotsDelay > 0 {
+		return di.RobotsDelay
 	}
-	return optsDelay
+	return di.OptsDelay
 }
 
 // Fetch requests the specified URL using the given user agent string. It uses
