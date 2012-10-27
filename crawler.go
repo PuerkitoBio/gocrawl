@@ -3,9 +3,9 @@ package gocrawl
 import (
 	"github.com/PuerkitoBio/purell"
 	"net/url"
+	"runtime"
 	"strings"
 	"sync"
-	"time"
 )
 
 // Communication from worker to the master crawler
@@ -274,12 +274,14 @@ func (this *Crawler) collectUrls() {
 				this.pushPopRefCount--
 			}
 
-		case <-time.After(100 * time.Millisecond):
+		default:
 			// Check if refcount is zero
 			if this.pushPopRefCount == 0 {
 				this.endReason = ErDone
 				stopAll()
 				return
+			} else {
+				runtime.Gosched()
 			}
 		}
 	}
