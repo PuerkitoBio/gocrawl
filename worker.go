@@ -95,7 +95,7 @@ func (this *worker) run() {
 				if isRobotsTxtUrl(cmd.u) {
 					this.requestRobotsTxt(cmd.u, this.lastCrawlDelay)
 				} else if this.isAllowedPerRobotsPolicies(cmd.u) {
-					this.requestUrl(cmd.u, this.lastCrawlDelay)
+					this.requestUrl(cmd.u, this.lastCrawlDelay, cmd.head)
 				} else {
 					// Must still notify Crawler that this URL was processed, although not visited
 					this.extender.Disallowed(cmd.u)
@@ -170,7 +170,7 @@ func (this *worker) requestRobotsTxt(u *url.URL, delay time.Duration) {
 
 		// Fetch the document, using the robot user agent,
 		// so that the host admin can see what robots are doing requests.
-	} else if res, ok := this.fetchUrl(u, this.robotUserAgent); ok {
+	} else if res, ok := this.fetchUrl(u, this.robotUserAgent, false); ok {
 		// Close the body on function end
 		defer res.Body.Close()
 
@@ -185,33 +185,45 @@ func (this *worker) requestRobotsTxt(u *url.URL, delay time.Duration) {
 }
 
 // Request the specified URL and return the response.
-func (this *worker) fetchUrl(u *url.URL, agent string) (res *http.Response, ok bool) {
+func (this *worker) fetchUrl(u *url.URL, agent string, headRequest bool) (res *http.Response, ok bool) {
 	var e error
 
-	// Compute the fetch duration
-	now := time.Now()
+	for {
+		// Compute the fetch duration
+		now := time.Now()
 
-	// Request the URL
-	if res, e = this.extender.Fetch(u, agent, false); e != nil {
-		// No fetch, so set to nil
-		this.lastFetch = nil
+		// Request the URL
+		if res, e = this.extender.Fetch(u, agent, headRequest); e != nil {
+			// No fetch, so set to nil
+			this.lastFetch = nil
 
-		// Notify error
-		this.extender.Error(newCrawlError(e, CekFetch, u))
-		this.logFunc(LogError, "ERROR fetching %s: %s\n", u.String(), e.Error())
+			// Notify error
+			this.extender.Error(newCrawlError(e, CekFetch, u))
+			this.logFunc(LogError, "ERROR fetching %s: %s\n", u.String(), e.Error())
 
-		// Return from this URL crawl
-		this.sendResponse(u, false, nil, false)
-	} else {
-		this.lastFetch = &FetchInfo{now.Sub(time.Now()), res.StatusCode, false, isRobotsTxtUrl(u)}
-		ok = true
+			// Return from this URL crawl
+			this.sendResponse(u, false, nil, false)
+		} else {
+			// TODO: Close body for head request!
+			this.lastFetch = &FetchInfo{now.Sub(time.Now()), res.StatusCode, headRequest, isRobotsTxtUrl(u)}
+			ok = !headRequest
+		}
+
+		if headRequest {
+			headRequest = false
+			if !this.extender.RequestGet(res) {
+				break
+			}
+		} else {
+			break
+		}
 	}
 	return
 }
 
 // Process the specified URL.
-func (this *worker) requestUrl(u *url.URL, delay time.Duration) {
-	if res, ok := this.fetchUrl(u, this.userAgent); ok {
+func (this *worker) requestUrl(u *url.URL, delay time.Duration, headRequest bool) {
+	if res, ok := this.fetchUrl(u, this.userAgent, headRequest); ok {
 		var harvested []*url.URL
 		var visited bool
 
