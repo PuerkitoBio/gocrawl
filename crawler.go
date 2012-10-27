@@ -19,6 +19,7 @@ type workerResponse struct {
 	idleDeath bool
 }
 
+// Communication from crawler to worker, about the URL to request
 type workerCommand struct {
 	u    *url.URL
 	head bool
@@ -54,6 +55,20 @@ func NewCrawler(ext Extender) *Crawler {
 	return NewCrawlerWithOptions(NewOptions(ext))
 }
 
+// Run starts the crawling process, based on the given seeds and the current
+// Options settings. Execution stops either when MaxVisits is reached (if specified)
+// or when no more URLs need visiting.
+func (this *Crawler) Run(seeds ...string) {
+	seeds = this.Options.Extender.Start(seeds)
+	parsedSeeds := this.init(seeds)
+
+	// Start with the seeds, and loop till death
+	this.enqueueUrls(&workerResponse{"", false, nil, parsedSeeds, false})
+	this.collectUrls()
+
+	this.Options.Extender.End(this.endReason)
+}
+
 // Initialize the Crawler's internal fields before a crawling execution.
 func (this *Crawler) init(seeds []string) []*url.URL {
 	// Helper log function, takes care of filtering based on level
@@ -82,20 +97,6 @@ func (this *Crawler) init(seeds []string) []*url.URL {
 	}
 
 	return parsedSeeds
-}
-
-// Run starts the crawling process, based on the given seeds and the current
-// Options settings. Execution stops either when MaxVisits is reached (if specified)
-// or when no more URLs need visiting.
-func (this *Crawler) Run(seeds ...string) {
-	seeds = this.Options.Extender.Start(seeds)
-	parsedSeeds := this.init(seeds)
-
-	// Start with the seeds, and loop till death
-	this.enqueueUrls(&workerResponse{"", false, nil, parsedSeeds, false})
-	this.collectUrls()
-
-	this.Options.Extender.End(this.endReason)
 }
 
 // Parse the seeds URL strings to URL objects, and return the URL objects slice,
@@ -164,14 +165,15 @@ func (this *Crawler) launchWorker(u *url.URL) *worker {
 // selection policies.
 func (this *Crawler) enqueueUrls(res *workerResponse) (cnt int) {
 	for _, u := range res.harvestedUrls {
-		var isVisited, enqueue bool
+		var isVisited, enqueue, head bool
+		var hr HeadRequestMode
 
 		// Normalize URL
 		purell.NormalizeURL(u, DefaultNormalizationFlags)
 		_, isVisited = this.visited[u.String()]
 
 		// Filter the URL - TODO : Priority is ignored at the moment
-		if enqueue, _, _ = this.Options.Extender.Filter(u, res.sourceUrl, isVisited); !enqueue {
+		if enqueue, _, hr = this.Options.Extender.Filter(u, res.sourceUrl, isVisited); !enqueue {
 			// Filter said NOT to use this url, so continue with next
 			this.logFunc(LogIgnored, "ignore on filter policy: %s\n", u.String())
 			continue
@@ -212,7 +214,15 @@ func (this *Crawler) enqueueUrls(res *workerResponse) (cnt int) {
 			cnt++
 			this.logFunc(LogEnqueued, "enqueue: %s\n", u.String())
 			this.Options.Extender.Enqueued(u, res.sourceUrl)
-			w.pop.stack(&workerCommand{u, false})
+			switch hr {
+			case HrmIgnore:
+				head = false
+			case HrmRequest:
+				head = true
+			default:
+				head = this.Options.HeadBeforeGet
+			}
+			w.pop.stack(&workerCommand{u, head})
 			this.pushPopRefCount++
 
 			// Once it is stacked, it WILL be visited eventually, so add it to the visited slice
