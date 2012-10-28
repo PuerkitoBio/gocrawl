@@ -49,6 +49,7 @@ func ExampleCrawl() {
 	c.Run("http://duckduckgo.com/")
 
 	// Remove "x" before Output: to activate the example (will run on go test)
+
 	// xOutput: robot user-agent: Googlebot (gocrawl v0.1)
 	// worker 1 launched for host duckduckgo.com
 	// worker 1 - waiting for pop...

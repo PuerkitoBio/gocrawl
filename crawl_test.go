@@ -2,6 +2,7 @@ package gocrawl
 
 import (
 	"bytes"
+	"errors"
 	"github.com/PuerkitoBio/goquery"
 	"io/ioutil"
 	"log"
@@ -235,3 +236,105 @@ func TestFilter(t *testing.T) {
 	assertCallCount(spy, eMKEnqueued, 2, t) // robots.txt triggers Enqueued too
 	assertIsInLog(*b, "ignore on filter policy: http://hostc/page2.html\n", t)
 }
+
+func TestNoHead(t *testing.T) {
+	var calledWithHead bool
+
+	b := new(bytes.Buffer)
+	ff := newFileFetcher(new(DefaultExtender))
+
+	spy := newSpyExtenderFunc(eMKFetch, func(u *url.URL, userAgent string, headRequest bool) (res *http.Response, err error) {
+		if headRequest {
+			calledWithHead = true
+		}
+		return ff.Fetch(u, userAgent, headRequest)
+	})
+
+	opts := NewOptions(spy)
+	opts.SameHostOnly = true
+	opts.CrawlDelay = DefaultTestCrawlDelay
+	opts.HeadBeforeGet = false
+	opts.Logger = log.New(b, "", 0)
+	opts.LogFlags = LogError | LogIgnored
+	c := NewCrawlerWithOptions(opts)
+	c.Run("http://hostb/page1.html")
+
+	if calledWithHead {
+		t.Fatal("Expected Fetch() to never be called with a HEAD request.")
+	}
+	assertCallCount(spy, eMKRequestGet, 0, t)
+	assertCallCount(spy, eMKFetch, 4, t) // robots.txt and unknown.html triggers Fetch
+}
+
+func TestAllHead(t *testing.T) {
+	var calledWithHead int
+	var calledWithoutHead int
+
+	b := new(bytes.Buffer)
+	ff := newFileFetcher(new(DefaultExtender))
+
+	spy := newSpyExtenderFunc(eMKFetch, func(u *url.URL, userAgent string, headRequest bool) (res *http.Response, err error) {
+		if headRequest {
+			calledWithHead += 1
+		} else {
+			calledWithoutHead += 1
+		}
+		return ff.Fetch(u, userAgent, headRequest)
+	})
+
+	opts := NewOptions(spy)
+	opts.SameHostOnly = true
+	opts.CrawlDelay = DefaultTestCrawlDelay
+	opts.HeadBeforeGet = true
+	opts.Logger = log.New(b, "", 0)
+	opts.LogFlags = LogError | LogIgnored
+	c := NewCrawlerWithOptions(opts)
+	c.Run("http://hosta/page1.html")
+
+	if calledWithHead != (calledWithoutHead - 1) {
+		t.Fatalf("Expected HEAD requests %d to be equal to GET requests %d minus one (for robots.txt).", calledWithHead, calledWithoutHead)
+	}
+	assertCallCount(spy, eMKFetch, 7, t) // Once for robots.txt, twice each for page1-3
+	assertCallCount(spy, eMKRequestGet, 3, t)
+	assertCallCount(spy, eMKEnqueued, 4, t)
+}
+
+func TestAllHeadWithFetchError(t *testing.T) {
+	var calledWithHead int
+	var calledWithoutHead int
+
+	b := new(bytes.Buffer)
+	ff := newFileFetcher(new(DefaultExtender))
+
+	spy := newSpyExtenderFunc(eMKFetch, func(u *url.URL, userAgent string, headRequest bool) (res *http.Response, err error) {
+		if headRequest {
+			calledWithHead += 1
+		} else {
+			calledWithoutHead += 1
+		}
+		if u.Path == "/unknown.html" {
+			return nil, errors.New("Forced error")
+		}
+		return ff.Fetch(u, userAgent, headRequest)
+	})
+
+	opts := NewOptions(spy)
+	opts.SameHostOnly = true
+	opts.CrawlDelay = DefaultTestCrawlDelay
+	opts.HeadBeforeGet = true
+	opts.Logger = log.New(b, "", 0)
+	opts.LogFlags = LogError | LogIgnored
+	c := NewCrawlerWithOptions(opts)
+	c.Run("http://hostb/page1.html")
+
+	// Head should be = 3 (page1, 2, unknown), Get should be = 3 (robots, page1, 2)
+	if calledWithHead != (calledWithoutHead) {
+		t.Fatalf("Expected HEAD requests %d to be equal to GET requests %d.", calledWithHead, calledWithoutHead)
+	}
+	assertCallCount(spy, eMKFetch, 6, t) // Once for robots.txt and unkwown.html, twice each for page1,2
+	assertCallCount(spy, eMKRequestGet, 2, t)
+	assertCallCount(spy, eMKEnqueued, 4, t)
+}
+
+// TODO : Test to assert delay!
+// TODO : Test with Head true, then requestget returns false, and vice-versa

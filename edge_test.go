@@ -17,6 +17,15 @@ func xTestBasicRealHttpRequests(t *testing.T) {
 	c.Run("http://provok.in")
 }
 
+func xTestNonHtmlRequest(t *testing.T) {
+	c := NewCrawler(new(DefaultExtender))
+
+	c.Options.CrawlDelay = DefaultCrawlDelay
+	c.Options.LogFlags = LogAll
+
+	c.Run("https://lh4.googleusercontent.com/-v0soe-ievYE/AAAAAAAAAAI/AAAAAAAAs7Y/_UbxpxC-VG0/photo.jpg")
+}
+
 func TestInvalidSeed(t *testing.T) {
 	var b bytes.Buffer
 
