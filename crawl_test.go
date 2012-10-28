@@ -18,6 +18,7 @@ func TestAllSameHost(t *testing.T) {
 	opts.SameHostOnly = true
 	opts.CrawlDelay = DefaultTestCrawlDelay
 	opts.LogFlags = LogAll
+	opts.Logger = log.New(new(bytes.Buffer), "", 0)
 	spy, _ := runFileFetcherWithOptions(opts, []string{"*"}, []string{"http://hosta/page1.html", "http://hosta/page4.html"})
 
 	assertCallCount(spy, eMKVisit, 5, t)
@@ -29,6 +30,7 @@ func TestAllNotSameHost(t *testing.T) {
 	opts.SameHostOnly = false
 	opts.CrawlDelay = DefaultTestCrawlDelay
 	opts.LogFlags = LogError | LogTrace
+	opts.Logger = log.New(new(bytes.Buffer), "", 0)
 	spy, _ := runFileFetcherWithOptions(opts, []string{"*"}, []string{"http://hosta/page1.html", "http://hosta/page4.html"})
 
 	assertCallCount(spy, eMKVisit, 10, t)
@@ -55,6 +57,7 @@ func TestRunTwiceSameInstance(t *testing.T) {
 	opts.SameHostOnly = true
 	opts.CrawlDelay = DefaultTestCrawlDelay
 	opts.LogFlags = LogNone
+	opts.Logger = log.New(new(bytes.Buffer), "", 0)
 	c := NewCrawlerWithOptions(opts)
 	c.Run("http://hosta/page1.html", "http://hosta/page4.html")
 
@@ -96,6 +99,7 @@ func TestReadBodyInVisitor(t *testing.T) {
 	c := NewCrawler(spy)
 	c.Options.CrawlDelay = DefaultTestCrawlDelay
 	c.Options.LogFlags = LogAll
+	c.Options.Logger = log.New(new(bytes.Buffer), "", 0)
 	c.Run("http://hostc/page3.html")
 
 	if err != nil {
@@ -133,6 +137,7 @@ func TestStartExtender(t *testing.T) {
 	opts := NewOptions(spy)
 	opts.SameHostOnly = true
 	opts.CrawlDelay = DefaultTestCrawlDelay
+	opts.Logger = log.New(new(bytes.Buffer), "", 0)
 	c := NewCrawlerWithOptions(opts)
 	c.Run("http://hostc/page1.html")
 
@@ -152,6 +157,7 @@ func TestEndReasonMaxVisits(t *testing.T) {
 	opts.SameHostOnly = true
 	opts.CrawlDelay = DefaultTestCrawlDelay
 	opts.MaxVisits = 1
+	opts.Logger = log.New(new(bytes.Buffer), "", 0)
 	c := NewCrawlerWithOptions(opts)
 	c.Run("http://hosta/page1.html")
 
@@ -170,6 +176,7 @@ func TestEndReasonDone(t *testing.T) {
 	opts := NewOptions(spy)
 	opts.SameHostOnly = true
 	opts.CrawlDelay = DefaultTestCrawlDelay
+	opts.Logger = log.New(new(bytes.Buffer), "", 0)
 	c := NewCrawlerWithOptions(opts)
 	c.Run("http://hosta/page5.html")
 
@@ -188,6 +195,7 @@ func TestErrorFetch(t *testing.T) {
 	opts := NewOptions(spy)
 	opts.SameHostOnly = true
 	opts.CrawlDelay = DefaultTestCrawlDelay
+	opts.Logger = log.New(new(bytes.Buffer), "", 0)
 	c := NewCrawlerWithOptions(opts)
 	c.Run("http://hostb/page1.html")
 
@@ -375,6 +383,51 @@ func TestRequestGetFalse(t *testing.T) {
 	assertCallCount(spy, eMKFetch, 6, t) // Once for robots.txt and page2, twice each for page1 and page3
 	assertCallCount(spy, eMKRequestGet, 3, t)
 	assertCallCount(spy, eMKEnqueued, 4, t)
+}
+
+func TestHeadTrueFilterOverride(t *testing.T) {
+	var calledWithHead int
+	var calledWithoutHead int
+
+	ff := newFileFetcher(new(DefaultExtender))
+	spy := newSpyExtenderFunc(eMKFetch, func(u *url.URL, userAgent string, headRequest bool) (res *http.Response, err error) {
+		if headRequest {
+			calledWithHead += 1
+		} else {
+			calledWithoutHead += 1
+		}
+		return ff.Fetch(u, userAgent, headRequest)
+	})
+
+	// Page2: No get, Page3: No enqueue
+	spy.setExtensionMethod(eMKFilter, func(u *url.URL, from *url.URL, isVisited bool) (enqueue bool, priority int, headRequest HeadRequestMode) {
+		if u.Path == "/page2.html" {
+			return !isVisited, 0, HrmIgnore
+		} else if u.Path == "/page3.html" {
+			return false, 0, HrmDefault
+		}
+		return !isVisited, 0, HrmDefault
+	})
+
+	opts := NewOptions(spy)
+	opts.SameHostOnly = true
+	opts.CrawlDelay = DefaultTestCrawlDelay
+	opts.HeadBeforeGet = true
+	opts.LogFlags = LogAll
+	opts.Logger = log.New(new(bytes.Buffer), "", 0)
+	c := NewCrawlerWithOptions(opts)
+	c.Run("http://hosta/page1.html")
+
+	// 3 GET: robots, page1, page2; 1 HEAD: page1
+	if calledWithHead != 1 {
+		t.Fatalf("Expected 1 HEAD requests, got %d.", calledWithHead)
+	}
+	if calledWithoutHead != 3 {
+		t.Fatalf("Expected 3 GET requests, got %d.", calledWithoutHead)
+	}
+	assertCallCount(spy, eMKFetch, 4, t)      // Once for robots.txt and page2, twice each for page1
+	assertCallCount(spy, eMKRequestGet, 1, t) // Page1 only, page2 ignored HEAD
+	assertCallCount(spy, eMKEnqueued, 3, t)   // Page1-2 and robots
 }
 
 // TODO : Test to assert delay!

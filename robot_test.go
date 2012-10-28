@@ -1,7 +1,9 @@
 package gocrawl
 
 import (
+	"bytes"
 	"io/ioutil"
+	"log"
 	"net/http"
 	"net/url"
 	"testing"
@@ -73,6 +75,7 @@ func TestCachedRobot(t *testing.T) {
 	opts.SameHostOnly = true
 	opts.CrawlDelay = DefaultTestCrawlDelay
 	opts.LogFlags = LogError | LogInfo
+	opts.Logger = log.New(new(bytes.Buffer), "", 0)
 	c := NewCrawlerWithOptions(opts)
 	c.Run("http://robota/page1.html")
 
@@ -94,6 +97,7 @@ func TestFetchedRobot(t *testing.T) {
 	opts.SameHostOnly = true
 	opts.CrawlDelay = DefaultTestCrawlDelay
 	opts.LogFlags = LogError | LogInfo
+	opts.Logger = log.New(new(bytes.Buffer), "", 0)
 	c := NewCrawlerWithOptions(opts)
 	c.Run("http://robotc/page4.html")
 
