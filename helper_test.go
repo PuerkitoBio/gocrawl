@@ -96,7 +96,7 @@ func (this *spyExtender) incCallCount(key extensionMethodKey, delta int64) {
 }
 
 func newSpyExtender(v func(*http.Response, *goquery.Document) ([]*url.URL, bool),
-	f func(*url.URL, *url.URL, bool) (bool, int)) *spyExtender {
+	f func(*url.URL, *url.URL, bool) (bool, int, HeadRequestMode)) *spyExtender {
 	spy := &spyExtender{fileFetcherExtender{}, make(map[extensionMethodKey]int64, eMKLast), make(map[extensionMethodKey]interface{}, 2)}
 	if v != nil {
 		spy.setExtensionMethod(eMKVisit, v)
@@ -127,18 +127,18 @@ func newSpyExtenderConfigured(visitDelay time.Duration, returnUrls []*url.URL, d
 		return returnUrls, doLinks
 	}
 
-	f := func(target *url.URL, origin *url.URL, isVisited bool) (bool, int) {
+	f := func(target *url.URL, origin *url.URL, isVisited bool) (bool, int, HeadRequestMode) {
 		time.Sleep(filterDelay)
 		if len(filterWhitelist) == 1 && filterWhitelist[0] == "*" {
 			// Allow all, unless already visited
-			return !isVisited, 0
+			return !isVisited, 0, HrmDefault
 		} else if len(filterWhitelist) > 0 {
 			if indexInStrings(filterWhitelist, target.String()) >= 0 {
 				// Allow if whitelisted and not already visited
-				return !isVisited, 0
+				return !isVisited, 0, HrmDefault
 			}
 		}
-		return false, 0
+		return false, 0, HrmDefault
 	}
 	return newSpyExtender(v, f)
 }

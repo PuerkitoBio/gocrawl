@@ -199,7 +199,7 @@ func TestErrorFetch(t *testing.T) {
 func TestComputeDelay(t *testing.T) {
 	b := new(bytes.Buffer)
 
-	spy := newSpyExtenderFunc(eMKComputeDelay, func(host string, optsDelay time.Duration, robotsDelay time.Duration, lastFetch time.Duration) time.Duration {
+	spy := newSpyExtenderFunc(eMKComputeDelay, func(host string, di *DelayInfo, lastFetch *FetchInfo) time.Duration {
 		return 17 * time.Millisecond
 	})
 
@@ -219,8 +219,8 @@ func TestComputeDelay(t *testing.T) {
 func TestFilter(t *testing.T) {
 	b := new(bytes.Buffer)
 
-	spy := newSpyExtenderFunc(eMKFilter, func(u *url.URL, from *url.URL, isVisited bool) (enqueue bool, priority int) {
-		return strings.HasSuffix(u.Path, "page1.html"), 0
+	spy := newSpyExtenderFunc(eMKFilter, func(u *url.URL, from *url.URL, isVisited bool) (enqueue bool, priority int, hrm HeadRequestMode) {
+		return strings.HasSuffix(u.Path, "page1.html"), 0, HrmDefault
 	})
 
 	opts := NewOptions(spy)
