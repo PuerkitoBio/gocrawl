@@ -128,9 +128,6 @@ func (this *worker) requestUrl(u *url.URL, headRequest bool) {
 		// Close the body on function end
 		defer res.Body.Close()
 
-		// Crawl delay starts now
-		wait := time.After(this.lastCrawlDelay)
-
 		// Any 2xx status code is good to go
 		if res.StatusCode >= 200 && res.StatusCode < 300 {
 			// Success, visit the URL
@@ -142,9 +139,6 @@ func (this *worker) requestUrl(u *url.URL, headRequest bool) {
 			this.logFunc(LogError, "ERROR status code for %s: %s\n", u.String(), res.Status)
 		}
 		this.sendResponse(u, visited, harvested, false)
-
-		// Wait for crawl delay
-		<-wait
 	}
 }
 
@@ -161,14 +155,7 @@ func (this *worker) requestRobotsTxt(u *url.URL) {
 		if res, ok := this.fetchUrl(u, this.robotUserAgent, false); ok {
 			// Close the body on function end
 			defer res.Body.Close()
-
-			// Crawl delay starts now
-			wait := time.After(this.lastCrawlDelay)
-
 			this.robotsGroup = this.getRobotsTxtGroup(nil, res)
-
-			// Wait for crawl delay
-			<-wait
 		}
 	}
 }
@@ -266,6 +253,8 @@ func (this *worker) fetchUrl(u *url.URL, agent string, headRequest bool) (res *h
 			headRequest = false
 			// Ask caller if we should proceed with a GET
 			if !this.extender.RequestGet(res) {
+				this.logFunc(LogIgnored, "ignored on HEAD filter policy: %s\n", u.String())
+				this.sendResponse(u, false, nil, false)
 				ok = false
 				break
 			}
