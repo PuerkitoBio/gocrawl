@@ -16,6 +16,7 @@ func TestAllSameHost(t *testing.T) {
 	opts := NewOptions(nil)
 	opts.SameHostOnly = true
 	opts.CrawlDelay = DefaultTestCrawlDelay
+	opts.LogFlags = LogAll
 	spy, _ := runFileFetcherWithOptions(opts, []string{"*"}, []string{"http://hosta/page1.html", "http://hosta/page4.html"})
 
 	assertCallCount(spy, eMKVisit, 5, t)
@@ -190,8 +191,8 @@ func TestErrorFetch(t *testing.T) {
 	c.Run("http://hostb/page1.html")
 
 	assertCallCount(spy, eMKError, 1, t)
-	if e.ErrorKind != CekFetch {
-		t.Fatalf("Expected error kind Fetch, got %v\n", e.ErrorKind)
+	if e.Kind != CekFetch {
+		t.Fatalf("Expected error kind Fetch, got %v\n", e.Kind)
 	}
 }
 

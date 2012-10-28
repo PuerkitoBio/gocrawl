@@ -29,6 +29,7 @@ type worker struct {
 	pop  popChannel
 	stop chan bool
 	wg   *sync.WaitGroup
+	wait <-chan time.Time
 
 	// Config
 	crawlDelay  time.Duration
@@ -118,6 +119,60 @@ func (this *worker) isAllowedPerRobotsPolicies(u *url.URL) bool {
 	return true
 }
 
+// Process the specified URL.
+func (this *worker) requestUrl(u *url.URL, headRequest bool) {
+	if res, ok := this.fetchUrl(u, this.userAgent, headRequest); ok {
+		var harvested []*url.URL
+		var visited bool
+
+		// Close the body on function end
+		defer res.Body.Close()
+
+		// Crawl delay starts now
+		wait := time.After(this.lastCrawlDelay)
+
+		// Any 2xx status code is good to go
+		if res.StatusCode >= 200 && res.StatusCode < 300 {
+			// Success, visit the URL
+			harvested = this.visitUrl(res)
+			visited = true
+		} else {
+			// Error based on status code received
+			this.extender.Error(newCrawlErrorMessage(res.Status, CekHttpStatusCode, u))
+			this.logFunc(LogError, "ERROR status code for %s: %s\n", u.String(), res.Status)
+		}
+		this.sendResponse(u, visited, harvested, false)
+
+		// Wait for crawl delay
+		<-wait
+	}
+}
+
+// Process the robots.txt URL.
+func (this *worker) requestRobotsTxt(u *url.URL) {
+	// Ask if it should be fetched
+	if reqRob, robData := this.extender.RequestRobots(u, this.robotUserAgent); !reqRob {
+		this.logFunc(LogInfo, "using robots.txt from cache\n")
+		this.robotsGroup = this.getRobotsTxtGroup(robData, nil)
+
+	} else {
+		// Fetch the document, using the robot user agent,
+		// so that the host admin can see what robots are doing requests.
+		if res, ok := this.fetchUrl(u, this.robotUserAgent, false); ok {
+			// Close the body on function end
+			defer res.Body.Close()
+
+			// Crawl delay starts now
+			wait := time.After(this.lastCrawlDelay)
+
+			this.robotsGroup = this.getRobotsTxtGroup(nil, res)
+
+			// Wait for crawl delay
+			<-wait
+		}
+	}
+}
+
 // Get the robots.txt group for this crawler.
 func (this *worker) getRobotsTxtGroup(b []byte, res *http.Response) (g *robotstxt.Group) {
 	var data *robotstxt.RobotsData
@@ -163,37 +218,21 @@ func (this *worker) setCrawlDelay() {
 	this.logFunc(LogInfo, "using crawl-delay: %v\n", this.lastCrawlDelay)
 }
 
-// Process the robots.txt URL.
-func (this *worker) requestRobotsTxt(u *url.URL) {
-	// Ask if it should be fetched
-	if reqRob, robData := this.extender.RequestRobots(u, this.robotUserAgent); !reqRob {
-		this.logFunc(LogInfo, "using robots.txt from cache\n")
-		this.robotsGroup = this.getRobotsTxtGroup(robData, nil)
-
-	} else {
-		// Fetch the document, using the robot user agent,
-		// so that the host admin can see what robots are doing requests.
-		this.setCrawlDelay()
-		if res, ok := this.fetchUrl(u, this.robotUserAgent, false); ok {
-			// Close the body on function end
-			defer res.Body.Close()
-
-			// Crawl delay starts now
-			wait := time.After(this.lastCrawlDelay)
-
-			this.robotsGroup = this.getRobotsTxtGroup(nil, res)
-
-			// Wait for crawl delay
-			<-wait
-		}
-	}
-}
-
 // Request the specified URL and return the response.
 func (this *worker) fetchUrl(u *url.URL, agent string, headRequest bool) (res *http.Response, ok bool) {
 	var e error
 
 	for {
+		// Wait for crawl delay, if one is pending.
+		this.logFunc(LogTrace, "waiting for crawl delay\n")
+		if this.wait != nil {
+			<-this.wait
+			this.wait = nil
+		}
+
+		// Compute the next delay
+		this.setCrawlDelay()
+
 		// Compute the fetch duration
 		now := time.Now()
 
@@ -208,53 +247,34 @@ func (this *worker) fetchUrl(u *url.URL, agent string, headRequest bool) (res *h
 
 			// Return from this URL crawl
 			this.sendResponse(u, false, nil, false)
+			return nil, false
+
 		} else {
-			// TODO: Close body for head request.
-			// TODO : DOesn't work as-is, no crawl delay applied between HEAD and GET.
-			this.lastFetch = &FetchInfo{now.Sub(time.Now()), res.StatusCode, headRequest, isRobotsTxtUrl(u)}
-			ok = !headRequest
+			// Get the fetch duration
+			fetchDuration := now.Sub(time.Now())
+			// Crawl delay starts now.
+			this.wait = time.After(this.lastCrawlDelay)
+
+			// Keep trace of this last fetch info
+			this.lastFetch = &FetchInfo{fetchDuration, res.StatusCode, headRequest, isRobotsTxtUrl(u)}
 		}
 
 		if headRequest {
+			// Close the HEAD request's body
+			defer res.Body.Close()
+			// Next up is GET request, maybe
 			headRequest = false
+			// Ask caller if we should proceed with a GET
 			if !this.extender.RequestGet(res) {
+				ok = false
 				break
 			}
 		} else {
+			ok = true
 			break
 		}
 	}
 	return
-}
-
-// Process the specified URL.
-func (this *worker) requestUrl(u *url.URL, headRequest bool) {
-	this.setCrawlDelay()
-	if res, ok := this.fetchUrl(u, this.userAgent, headRequest); ok {
-		var harvested []*url.URL
-		var visited bool
-
-		// Close the body on function end
-		defer res.Body.Close()
-
-		// Crawl delay starts now
-		wait := time.After(this.lastCrawlDelay)
-
-		// Any 2xx status code is good to go
-		if res.StatusCode >= 200 && res.StatusCode < 300 {
-			// Success, visit the URL
-			harvested = this.visitUrl(res)
-			visited = true
-		} else {
-			// Error based on status code received
-			this.extender.Error(newCrawlErrorMessage(res.Status, CekHttpStatusCode, u))
-			this.logFunc(LogError, "ERROR status code for %s: %s\n", u.String(), res.Status)
-		}
-		this.sendResponse(u, visited, harvested, false)
-
-		// Wait for crawl delay
-		<-wait
-	}
 }
 
 // Send a response to the crawler.
