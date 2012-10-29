@@ -38,7 +38,7 @@ func ExampleCrawl() {
 	// Set custom options
 	opts := NewOptions(new(ExampleExtender))
 	opts.CrawlDelay = 1 * time.Second
-	opts.LogFlags = LogInfo
+	opts.LogFlags = LogError
 	opts.Logger = log.New(os.Stdout, "", 0)
 
 	// Play nice with ddgo when running the test!
@@ -50,19 +50,5 @@ func ExampleCrawl() {
 
 	// Remove "x" before Output: to activate the example (will run on go test)
 
-	// xOutput: robot user-agent: Googlebot (gocrawl v0.1)
-	// worker 1 launched for host duckduckgo.com
-	// worker 1 - waiting for pop...
-	// worker 1 - popped: http://duckduckgo.com/robots.txt
-	// worker 1 - using crawl-delay: 1s
-	// worker 1 - popped: http://duckduckgo.com
-	// worker 1 - using crawl-delay: 1s
-	// worker 1 - waiting for pop...
-	// worker 1 - popped: http://duckduckgo.com/about.html
-	// worker 1 - using crawl-delay: 1s
-	// sending STOP signals...
-	// waiting for goroutines to complete...
-	// worker 1 - stop signal received.
-	// worker 1 - worker done.
-	// crawler done.
+	// xOutput: 
 }

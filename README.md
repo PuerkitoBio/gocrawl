@@ -66,16 +66,16 @@ func (this *ExampleExtender) Visit(res *http.Response, doc *goquery.Document) ([
 }
 
 // Override Filter for our need.
-func (this *ExampleExtender) Filter(u *url.URL, src *url.URL, isVisited bool) (bool, int) {
+func (this *ExampleExtender) Filter(u *url.URL, src *url.URL, isVisited bool) (bool, int, HeadRequestMode) {
   // Priority (2nd return value) is ignored at the moment
-  return rxOk.MatchString(u.String()), 0
+  return rxOk.MatchString(u.String()), 0, HrmDefault
 }
 
 func ExampleCrawl() {
   // Set custom options
   opts := NewOptions(new(ExampleExtender))
   opts.CrawlDelay = 1 * time.Second
-  opts.LogFlags = LogInfo
+  opts.LogFlags = LogError
   opts.Logger = log.New(os.Stdout, "", 0)
 
   // Play nice with ddgo when running the test!
@@ -85,27 +85,15 @@ func ExampleCrawl() {
   c := NewCrawlerWithOptions(opts)
   c.Run("http://duckduckgo.com/")
 
-  // Output: robot user-agent: Googlebot (gocrawl v0.1)
-  // worker 1 launched for host duckduckgo.com
-  // worker 1 - waiting for pop...
-  // worker 1 - popped: http://duckduckgo.com/robots.txt
-  // worker 1 - using crawl-delay: 1s
-  // worker 1 - popped: http://duckduckgo.com
-  // worker 1 - using crawl-delay: 1s
-  // worker 1 - waiting for pop...
-  // worker 1 - popped: http://duckduckgo.com/about.html
-  // worker 1 - using crawl-delay: 1s
-  // sending STOP signals...
-  // waiting for goroutines to complete...
-  // worker 1 - stop signal received.
-  // worker 1 - worker done.
-  // crawler done.
+  // Remove "x" before Output: to activate the example (will run on go test)
+
+  // xOutput: 
 }
 ```
 
 ## API
 
-gocrawl can be described as a minimalist web crawler (hence the "slim" tag, at ~700 sloc), providing the basic engine upon which to build a full-fledged indexing machine with caching, persistence and staleness detection logic, or to use as is for quick and easy crawling. For gocrawl itself does not attempt to detect staleness of a page, nor does it implement a caching mechanism. If an URL is enqueued to be processed, it *will* make a request to fetch it (provided it is allowed by robots.txt - hence the "polite" tag). And there is no prioritization among the URLs to process, it assumes that all enqueued URLs must be visited at some point, and that the order in which they are is unimportant (*subject to change in the future - prioritization __may__ get implemented*).
+gocrawl can be described as a minimalist web crawler (hence the "slim" tag, at <1000 sloc), providing the basic engine upon which to build a full-fledged indexing machine with caching, persistence and staleness detection logic, or to use as is for quick and easy crawling. For gocrawl itself does not attempt to detect staleness of a page, nor does it implement a caching mechanism. If an URL is enqueued to be processed, it *will* make a request to fetch it (provided it is allowed by robots.txt - hence the "polite" tag). And there is no prioritization among the URLs to process, it assumes that all enqueued URLs must be visited at some point, and that the order in which they are is unimportant (*subject to change in the future - prioritization __may__ get implemented*).
 
 However, it does provide plenty of [hooks and customizations](#hc). Instead of trying to do everything and impose a way to do it, it offers ways to manipulate and adapt it to anyone's needs.
 
@@ -151,6 +139,8 @@ The `Options` type provides the hooks and customizations offered by gocrawl. All
 
 *    **SameHostOnly** : Limit the URLs to enqueue only to those links targeting the same host, which is `true` by default.
 
+*    **HeadBeforeGet** : Asks the crawler to issue a HEAD request (and a subsequent `RequestGet()` method call) before making the eventual GET request. This is set to `false` by default. See also the `Filter()` extender method.
+
 *    **URLNormalizationFlags** : The flags to apply when normalizing the URL using the [purell][] library. The URLs found by crawling a page are normalized before being submitted to the `Filter` extender function (to determine if they should be visited or not). Defaults to the most aggressive normalization allowed by purell, `purell.FlagsAllGreedy`.
 
 *    **Logger** : An instance of Go's built-in `*log.Logger` type. It can be created by calling `log.New()`. By default, a logger that prints to the standard output is used.
@@ -165,17 +155,19 @@ This last option field, `Extender`, is crucial in using gocrawl, so here are the
 
 *    **End** : `End(reason EndReason)`. Called when the crawling ends, with an [`EndReason`][er] flag as argument.
 
-*    **Error** : `Error(err *CrawlError)`. Called when an error occurs. Errors do **not** stop the crawling execution. A [`CrawlError`][ce] instance is passed as argument. This specialized error implementation includes - among other interesting fields - an `ErrorKind` field that details the step where the error occurred.
+*    **Error** : `Error(err *CrawlError)`. Called when an error occurs. Errors do **not** stop the crawling execution. A [`CrawlError`][ce] instance is passed as argument. This specialized error implementation includes - among other interesting fields - a `Kind` field that indicates the step where the error occurred.
 
-*    **ComputeDelay** : `ComputeDelay(host string, optsDelay time.Duration, robotsDelay time.Duration, lastFetch time.Duration) time.Duration`. Called by a worker before requesting a URL. Arguments are the host's name, the configured crawl delay (from the Options), the robots.txt crawl delay (if any), and the duration of the last fetch, so that it is possible to adapt to the current responsiveness of the host. It returns the delay to use.
+*    **ComputeDelay** : `ComputeDelay(host string, di *DelayInfo, lastFetch *FetchInfo) time.Duration`. Called by a worker before requesting a URL. Arguments are the host's name, the crawl delay information (delays from the Options struct, from the robots.txt, and the last used delay), and the last fetch information, so that it is possible to adapt to the current responsiveness of the host. It returns the delay to use.
 
-*    **Fetch** : `Fetch(u *url.URL, userAgent string) (*http.Response, error)`. The `DefaultExtender.Fetch` implementation uses the default `http.Client` to fetch the pages. It will automatically follow redirects up to 10 times (see the [net/http doc for Client struct][netclient]).
+*    **Fetch** : `Fetch(u *url.URL, userAgent string, headRequest bool) (res *http.Response, err error)`. The `DefaultExtender.Fetch` implementation uses the default `http.Client` to fetch the pages. It will automatically follow redirects up to 10 times (see the [net/http doc for Client struct][netclient]). If `headRequest` is `true`, a HEAD request is made instead of a GET.
+
+*    **RequestGet** : `RequestGet(headRes *http.Response) bool`. Indicates if the crawler should proceed with a GET request based on the HEAD request's response. This method is only called if a HEAD request was requested (either via the global `HeadBeforeGet` option, or via the `Filter()` return value). The default implementation always returns `true`.
 
 *    **RequestRobots** : `RequestRobots(u *url.URL, robotAgent string) (request bool, data []byte)`. Asks whether the robots.txt URL should be fetched. If `false` is returned as first value, the `data` value is considered to be the robots.txt cached content, and is used as such. The `DefaultExtender.RequestRobots` implementation returns `true, nil`.
 
 *    **FetchedRobots** : `FetchedRobots(res *http.Response)`. Called when the robots.txt URL has been fetched from the host.
 
-*    **Filter** : `Filter(u *url.URL, from *url.URL, isVisited bool) (enqueue bool, priority int)`. Called when deciding if a URL should be enqueued for visiting. It receives the target `*url.URL` link, the source `*url.URL` link (where this URL was found, `nil` for the seeds), and a `bool` is visited flag, indicating if this URL has already been visited in this crawling execution. It returns a `bool` flag ordering gocrawl to visit (`true`) or ignore (`false`) the URL, and a priority value, **ignored at the moment**. However, even if the function returns true, the URL must still comply to these rules:
+*    **Filter** : `Filter(u *url.URL, from *url.URL, isVisited bool) (enqueue bool, priority int, headRequest HeadRequestMode)`. Called when deciding if a URL should be enqueued for visiting. It receives the target `*url.URL` link, the source `*url.URL` link (where this URL was found, `nil` for the seeds), and a `bool` is visited flag, indicating if this URL has already been visited in this crawling execution. It returns a `bool` flag ordering gocrawl to visit (`true`) or ignore (`false`) the URL, a priority value, **ignored at the moment**, and whether or not to request a HEAD before a GET (if `HrmDefault` is returned, the global `HeadBeforeGet` setting is used, while `HrmRequest` and `HrmIgnore` override the global setting). Even if the function returns `true` to enqueue the URL for visiting, it must still comply to these rules:
 
 1. It must be an absolute URL 
 2. It must have a `http/https` scheme
