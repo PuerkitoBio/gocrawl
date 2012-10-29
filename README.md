@@ -157,7 +157,7 @@ This last option field, `Extender`, is crucial in using gocrawl, so here are the
 
 *    **Error** : `Error(err *CrawlError)`. Called when an error occurs. Errors do **not** stop the crawling execution. A [`CrawlError`][ce] instance is passed as argument. This specialized error implementation includes - among other interesting fields - a `Kind` field that indicates the step where the error occurred.
 
-*    **ComputeDelay** : `ComputeDelay(host string, di *DelayInfo, lastFetch *FetchInfo) time.Duration`. Called by a worker before requesting a URL. Arguments are the host's name, the crawl delay information (delays from the Options struct, from the robots.txt, and the last used delay), and the last fetch information, so that it is possible to adapt to the current responsiveness of the host. It returns the delay to use.
+*    **ComputeDelay** : `ComputeDelay(host string, di *DelayInfo, lastFetch *FetchInfo) time.Duration`. Called by a worker before requesting a URL. Arguments are the host's name, the crawl delay information (delays from the Options struct, from the robots.txt, and the last used delay), and the last fetch information, so that it is possible to adapt to the current responsiveness of the host. It returns the delay to use. 
 
 *    **Fetch** : `Fetch(u *url.URL, userAgent string, headRequest bool) (res *http.Response, err error)`. The `DefaultExtender.Fetch` implementation uses the default `http.Client` to fetch the pages. It will automatically follow redirects up to 10 times (see the [net/http doc for Client struct][netclient]). If `headRequest` is `true`, a HEAD request is made instead of a GET.
 
