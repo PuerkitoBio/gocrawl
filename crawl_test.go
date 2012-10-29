@@ -511,4 +511,41 @@ func TestHeadResponse(t *testing.T) {
 	}
 }
 
-// TODO : Test to assert delay!
+func TestCrawlDelay(t *testing.T) {
+	var last time.Time
+	var since []time.Duration
+	cnt := 0
+
+	ff := newFileFetcher(new(DefaultExtender))
+	spy := newSpyExtenderFunc(eMKFetch, func(u *url.URL, userAgent string, headRequest bool) (res *http.Response, err error) {
+		since = append(since, time.Now().Sub(last))
+		last = time.Now()
+		return ff.Fetch(u, userAgent, headRequest)
+	})
+
+	spy.setExtensionMethod(eMKComputeDelay, func(host string, di *DelayInfo, lastFetch *FetchInfo) time.Duration {
+		// Crawl delay always grows
+		cnt++
+		return time.Duration(int(di.OptsDelay) * cnt)
+	})
+
+	opts := NewOptions(spy)
+	opts.SameHostOnly = true
+	opts.CrawlDelay = DefaultTestCrawlDelay
+	opts.HeadBeforeGet = true
+	opts.LogFlags = LogAll
+	opts.Logger = log.New(new(bytes.Buffer), "", 0)
+	c := NewCrawlerWithOptions(opts)
+	last = time.Now()
+	c.Run("http://hosta/page1.html")
+
+	assertCallCount(spy, eMKFetch, 7, t)
+	assertCallCount(spy, eMKComputeDelay, 7, t)
+	for i, d := range since {
+		min := (DefaultTestCrawlDelay * time.Duration(i))
+		t.Logf("Actual delay for request %d is %v.", i, d)
+		if d < min {
+			t.Errorf("Expected a delay of at least %v for fetch #%d, got %v.", min, i, d)
+		}
+	}
+}
