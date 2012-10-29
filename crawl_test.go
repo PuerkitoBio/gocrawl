@@ -76,7 +76,7 @@ func TestRunTwiceSameInstance(t *testing.T) {
 func TestIdleTimeOut(t *testing.T) {
 	opts := NewOptions(nil)
 	opts.SameHostOnly = false
-	opts.WorkerIdleTTL = 200 * time.Millisecond
+	opts.WorkerIdleTTL = 50 * time.Millisecond
 	opts.CrawlDelay = DefaultTestCrawlDelay
 	opts.LogFlags = LogInfo
 	_, b := runFileFetcherWithOptions(opts,
@@ -430,6 +430,85 @@ func TestHeadTrueFilterOverride(t *testing.T) {
 	assertCallCount(spy, eMKEnqueued, 3, t)   // Page1-2 and robots
 }
 
+func TestHeadFalseFilterOverride(t *testing.T) {
+	var calledWithHead int
+	var calledWithoutHead int
+
+	ff := newFileFetcher(new(DefaultExtender))
+	spy := newSpyExtenderFunc(eMKFetch, func(u *url.URL, userAgent string, headRequest bool) (res *http.Response, err error) {
+		if headRequest {
+			calledWithHead += 1
+		} else {
+			calledWithoutHead += 1
+		}
+		return ff.Fetch(u, userAgent, headRequest)
+	})
+
+	// Page1: default, Page2: Head before get, Page3: No enqueue
+	spy.setExtensionMethod(eMKFilter, func(u *url.URL, from *url.URL, isVisited bool) (enqueue bool, priority int, headRequest HeadRequestMode) {
+		if u.Path == "/page2.html" {
+			return !isVisited, 0, HrmRequest
+		} else if u.Path == "/page3.html" {
+			return false, 0, HrmDefault
+		}
+		return !isVisited, 0, HrmDefault
+	})
+
+	opts := NewOptions(spy)
+	opts.SameHostOnly = true
+	opts.CrawlDelay = DefaultTestCrawlDelay
+	opts.HeadBeforeGet = false
+	opts.LogFlags = LogAll
+	opts.Logger = log.New(new(bytes.Buffer), "", 0)
+	c := NewCrawlerWithOptions(opts)
+	c.Run("http://hosta/page1.html")
+
+	// 3 GET: robots, page1, page2; 1 HEAD: page2
+	if calledWithHead != 1 {
+		t.Fatalf("Expected 1 HEAD requests, got %d.", calledWithHead)
+	}
+	if calledWithoutHead != 3 {
+		t.Fatalf("Expected 3 GET requests, got %d.", calledWithoutHead)
+	}
+	assertCallCount(spy, eMKFetch, 4, t)      // Once for robots.txt and page1, twice for page2
+	assertCallCount(spy, eMKRequestGet, 1, t) // Page2 only, page1 ignored HEAD
+	assertCallCount(spy, eMKEnqueued, 3, t)   // Page1-2 and robots
+}
+
+func TestHeadResponse(t *testing.T) {
+	var b []byte
+	var e error
+	var headLen int
+	de := new(DefaultExtender)
+
+	spy := newSpyExtenderFunc(eMKRequestGet, func(headRes *http.Response) bool {
+		headLen = len(headRes.Header)
+		b, e = ioutil.ReadAll(headRes.Body)
+		return false
+	})
+	spy.setExtensionMethod(eMKFetch, func(u *url.URL, userAgent string, headRequest bool) (res *http.Response, err error) {
+		return de.Fetch(u, userAgent, headRequest)
+	})
+
+	opts := NewOptions(spy)
+	opts.SameHostOnly = true
+	opts.CrawlDelay = DefaultTestCrawlDelay
+	opts.HeadBeforeGet = true
+	opts.LogFlags = LogAll
+	opts.Logger = log.New(new(bytes.Buffer), "", 0)
+	opts.MaxVisits = 1
+	c := NewCrawlerWithOptions(opts)
+	c.Run("http://provok.in")
+
+	if e != nil {
+		t.Fatal(e)
+	}
+	if len(b) > 0 {
+		t.Fatal("Expected body to be empty.")
+	}
+	if headLen == 0 {
+		t.Fatal("Expected headers to be present.")
+	}
+}
+
 // TODO : Test to assert delay!
-// TODO : Test with Head true, then Filter returns false, and vice-versa
-// TODO : Test to assert HEAD request returns no body, only headers (needs real request)
