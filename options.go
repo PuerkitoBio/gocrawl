@@ -2,8 +2,6 @@ package gocrawl
 
 import (
 	"github.com/PuerkitoBio/purell"
-	"log"
-	"os"
 	"time"
 )
 
@@ -26,7 +24,6 @@ type Options struct {
 	SameHostOnly          bool
 	HeadBeforeGet         bool
 	URLNormalizationFlags purell.NormalizationFlags
-	Logger                *log.Logger
 	LogFlags              LogFlags
 	Extender              Extender
 }
@@ -41,7 +38,6 @@ func NewOptions(ext Extender) *Options {
 		true,
 		false,
 		DefaultNormalizationFlags,
-		log.New(os.Stdout, "gocrawl ", log.LstdFlags|log.Lmicroseconds),
 		LogError,
 		ext}
 }

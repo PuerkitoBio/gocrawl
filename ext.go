@@ -2,6 +2,7 @@ package gocrawl
 
 import (
 	"github.com/PuerkitoBio/goquery"
+	"log"
 	"net/http"
 	"net/url"
 	"time"
@@ -30,6 +31,7 @@ const (
 	CekProcessLinks
 )
 
+// Flag indicating the head request override mode
 type HeadRequestMode uint8
 
 const (
@@ -38,6 +40,7 @@ const (
 	HrmIgnore
 )
 
+// Crawl error information.
 type CrawlError struct {
 	Err  error
 	Kind CrawlErrorKind
@@ -45,6 +48,7 @@ type CrawlError struct {
 	msg  string
 }
 
+// Implementation of the error interface.
 func (this CrawlError) Error() string {
 	if this.Err != nil {
 		return this.Err.Error()
@@ -52,20 +56,25 @@ func (this CrawlError) Error() string {
 	return this.msg
 }
 
+// Create a new CrawlError based on a source error.
 func newCrawlError(e error, kind CrawlErrorKind, u *url.URL) *CrawlError {
 	return &CrawlError{e, kind, u, ""}
 }
 
+// Create a new CrawlError with the specified message.
 func newCrawlErrorMessage(msg string, kind CrawlErrorKind, u *url.URL) *CrawlError {
 	return &CrawlError{nil, kind, u, msg}
 }
 
+// Delay information: the Options delay, the Robots.txt delay, and the last delay used.
 type DelayInfo struct {
 	OptsDelay   time.Duration
 	RobotsDelay time.Duration
 	LastDelay   time.Duration
 }
 
+// Fetch information: the duration of the fetch, the returned status code, whether or
+// not it was a HEAD request, and whether or not it was a robots.txt request.
 type FetchInfo struct {
 	Duration      time.Duration
 	StatusCode    int
@@ -78,6 +87,7 @@ type Extender interface {
 	Start(seeds []string) []string
 	End(reason EndReason)
 	Error(err *CrawlError)
+	Log(logFlags LogFlags, msgLevel LogFlags, msg string)
 
 	ComputeDelay(host string, di *DelayInfo, lastFetch *FetchInfo) time.Duration
 	Fetch(u *url.URL, userAgent string, headRequest bool) (res *http.Response, err error)
@@ -106,6 +116,13 @@ func (this *DefaultExtender) End(reason EndReason) {}
 // Error is a no-op (logging is done automatically, regardless of the implementation
 // of the Error() hook).
 func (this *DefaultExtender) Error(err *CrawlError) {}
+
+// Log prints to the standard error by default, based on the requested log verbosity.
+func (this *DefaultExtender) Log(logFlags LogFlags, msgLevel LogFlags, msg string) {
+	if logFlags&msgLevel == msgLevel {
+		log.Print(msg)
+	}
+}
 
 // ComputeDelay returns the delay specified in the Crawler's Options, unless a
 // crawl-delay is specified in the robots.txt file, which has precedence.

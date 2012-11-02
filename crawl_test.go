@@ -1,11 +1,9 @@
 package gocrawl
 
 import (
-	"bytes"
 	"errors"
 	"github.com/PuerkitoBio/goquery"
 	"io/ioutil"
-	"log"
 	"net/http"
 	"net/url"
 	"strings"
@@ -18,8 +16,7 @@ func TestAllSameHost(t *testing.T) {
 	opts.SameHostOnly = true
 	opts.CrawlDelay = DefaultTestCrawlDelay
 	opts.LogFlags = LogAll
-	opts.Logger = log.New(new(bytes.Buffer), "", 0)
-	spy, _ := runFileFetcherWithOptions(opts, []string{"*"}, []string{"http://hosta/page1.html", "http://hosta/page4.html"})
+	spy := runFileFetcherWithOptions(opts, []string{"*"}, []string{"http://hosta/page1.html", "http://hosta/page4.html"})
 
 	assertCallCount(spy, eMKVisit, 5, t)
 	assertCallCount(spy, eMKFilter, 13, t)
@@ -30,8 +27,7 @@ func TestAllNotSameHost(t *testing.T) {
 	opts.SameHostOnly = false
 	opts.CrawlDelay = DefaultTestCrawlDelay
 	opts.LogFlags = LogError | LogTrace
-	opts.Logger = log.New(new(bytes.Buffer), "", 0)
-	spy, _ := runFileFetcherWithOptions(opts, []string{"*"}, []string{"http://hosta/page1.html", "http://hosta/page4.html"})
+	spy := runFileFetcherWithOptions(opts, []string{"*"}, []string{"http://hosta/page1.html", "http://hosta/page4.html"})
 
 	assertCallCount(spy, eMKVisit, 10, t)
 	assertCallCount(spy, eMKFilter, 24, t)
@@ -42,7 +38,7 @@ func TestSelectOnlyPage1s(t *testing.T) {
 	opts.SameHostOnly = false
 	opts.CrawlDelay = DefaultTestCrawlDelay
 	opts.LogFlags = LogError | LogTrace
-	spy, _ := runFileFetcherWithOptions(opts,
+	spy := runFileFetcherWithOptions(opts,
 		[]string{"http://hosta/page1.html", "http://hostb/page1.html", "http://hostc/page1.html", "http://hostd/page1.html"},
 		[]string{"http://hosta/page1.html", "http://hosta/page4.html", "http://hostb/pageunlinked.html"})
 
@@ -57,7 +53,6 @@ func TestRunTwiceSameInstance(t *testing.T) {
 	opts.SameHostOnly = true
 	opts.CrawlDelay = DefaultTestCrawlDelay
 	opts.LogFlags = LogNone
-	opts.Logger = log.New(new(bytes.Buffer), "", 0)
 	c := NewCrawlerWithOptions(opts)
 	c.Run("http://hosta/page1.html", "http://hosta/page4.html")
 
@@ -79,12 +74,12 @@ func TestIdleTimeOut(t *testing.T) {
 	opts.WorkerIdleTTL = 50 * time.Millisecond
 	opts.CrawlDelay = DefaultTestCrawlDelay
 	opts.LogFlags = LogInfo
-	_, b := runFileFetcherWithOptions(opts,
+	spy := runFileFetcherWithOptions(opts,
 		[]string{"*"},
 		[]string{"http://hosta/page1.html", "http://hosta/page4.html", "http://hostb/pageunlinked.html"})
 
-	assertIsInLog(*b, "worker for host hostd cleared on idle policy\n", t)
-	assertIsInLog(*b, "worker for host hostunknown cleared on idle policy\n", t)
+	assertIsInLog(spy.b, "worker for host hostd cleared on idle policy\n", t)
+	assertIsInLog(spy.b, "worker for host hostunknown cleared on idle policy\n", t)
 }
 
 func TestReadBodyInVisitor(t *testing.T) {
@@ -99,7 +94,6 @@ func TestReadBodyInVisitor(t *testing.T) {
 	c := NewCrawler(spy)
 	c.Options.CrawlDelay = DefaultTestCrawlDelay
 	c.Options.LogFlags = LogAll
-	c.Options.Logger = log.New(new(bytes.Buffer), "", 0)
 	c.Run("http://hostc/page3.html")
 
 	if err != nil {
@@ -113,7 +107,7 @@ func TestEnqueuedCount(t *testing.T) {
 	opts := NewOptions(nil)
 	opts.SameHostOnly = true
 	opts.CrawlDelay = DefaultTestCrawlDelay
-	spy, _ := runFileFetcherWithOptions(opts, []string{"*"}, []string{"http://robota/page1.html"})
+	spy := runFileFetcherWithOptions(opts, []string{"*"}, []string{"http://robota/page1.html"})
 
 	// page1 and robots.txt (did not visit page1, so page2 never found)
 	assertCallCount(spy, eMKEnqueued, 2, t)
@@ -125,7 +119,7 @@ func TestVisitedCount(t *testing.T) {
 	opts := NewOptions(nil)
 	opts.SameHostOnly = true
 	opts.CrawlDelay = DefaultTestCrawlDelay
-	spy, _ := runFileFetcherWithOptions(opts, []string{"*"}, []string{"http://hosta/page1.html"})
+	spy := runFileFetcherWithOptions(opts, []string{"*"}, []string{"http://hosta/page1.html"})
 
 	assertCallCount(spy, eMKVisited, 3, t)
 }
@@ -137,7 +131,6 @@ func TestStartExtender(t *testing.T) {
 	opts := NewOptions(spy)
 	opts.SameHostOnly = true
 	opts.CrawlDelay = DefaultTestCrawlDelay
-	opts.Logger = log.New(new(bytes.Buffer), "", 0)
 	c := NewCrawlerWithOptions(opts)
 	c.Run("http://hostc/page1.html")
 
@@ -157,7 +150,6 @@ func TestEndReasonMaxVisits(t *testing.T) {
 	opts.SameHostOnly = true
 	opts.CrawlDelay = DefaultTestCrawlDelay
 	opts.MaxVisits = 1
-	opts.Logger = log.New(new(bytes.Buffer), "", 0)
 	c := NewCrawlerWithOptions(opts)
 	c.Run("http://hosta/page1.html")
 
@@ -176,7 +168,6 @@ func TestEndReasonDone(t *testing.T) {
 	opts := NewOptions(spy)
 	opts.SameHostOnly = true
 	opts.CrawlDelay = DefaultTestCrawlDelay
-	opts.Logger = log.New(new(bytes.Buffer), "", 0)
 	c := NewCrawlerWithOptions(opts)
 	c.Run("http://hosta/page5.html")
 
@@ -195,7 +186,6 @@ func TestErrorFetch(t *testing.T) {
 	opts := NewOptions(spy)
 	opts.SameHostOnly = true
 	opts.CrawlDelay = DefaultTestCrawlDelay
-	opts.Logger = log.New(new(bytes.Buffer), "", 0)
 	c := NewCrawlerWithOptions(opts)
 	c.Run("http://hostb/page1.html")
 
@@ -206,8 +196,6 @@ func TestErrorFetch(t *testing.T) {
 }
 
 func TestComputeDelay(t *testing.T) {
-	b := new(bytes.Buffer)
-
 	spy := newSpyExtenderFunc(eMKComputeDelay, func(host string, di *DelayInfo, lastFetch *FetchInfo) time.Duration {
 		return 17 * time.Millisecond
 	})
@@ -215,19 +203,16 @@ func TestComputeDelay(t *testing.T) {
 	opts := NewOptions(spy)
 	opts.SameHostOnly = true
 	opts.CrawlDelay = DefaultTestCrawlDelay
-	opts.Logger = log.New(b, "", 0)
 	opts.LogFlags = LogError | LogInfo
 	opts.MaxVisits = 2
 	c := NewCrawlerWithOptions(opts)
 	c.Run("http://hosta/page1.html")
 
 	assertCallCount(spy, eMKComputeDelay, 3, t)
-	assertIsInLog(*b, "using crawl-delay: 17ms\n", t)
+	assertIsInLog(spy.b, "using crawl-delay: 17ms\n", t)
 }
 
 func TestFilter(t *testing.T) {
-	b := new(bytes.Buffer)
-
 	spy := newSpyExtenderFunc(eMKFilter, func(u *url.URL, from *url.URL, isVisited bool) (enqueue bool, priority int, hrm HeadRequestMode) {
 		return strings.HasSuffix(u.Path, "page1.html"), 0, HrmDefault
 	})
@@ -235,20 +220,18 @@ func TestFilter(t *testing.T) {
 	opts := NewOptions(spy)
 	opts.SameHostOnly = true
 	opts.CrawlDelay = DefaultTestCrawlDelay
-	opts.Logger = log.New(b, "", 0)
 	opts.LogFlags = LogError | LogIgnored
 	c := NewCrawlerWithOptions(opts)
 	c.Run("http://hostc/page1.html")
 
 	assertCallCount(spy, eMKFilter, 3, t)
 	assertCallCount(spy, eMKEnqueued, 2, t) // robots.txt triggers Enqueued too
-	assertIsInLog(*b, "ignore on filter policy: http://hostc/page2.html\n", t)
+	assertIsInLog(spy.b, "ignore on filter policy: http://hostc/page2.html\n", t)
 }
 
 func TestNoHead(t *testing.T) {
 	var calledWithHead bool
 
-	b := new(bytes.Buffer)
 	ff := newFileFetcher(new(DefaultExtender))
 
 	spy := newSpyExtenderFunc(eMKFetch, func(u *url.URL, userAgent string, headRequest bool) (res *http.Response, err error) {
@@ -262,7 +245,6 @@ func TestNoHead(t *testing.T) {
 	opts.SameHostOnly = true
 	opts.CrawlDelay = DefaultTestCrawlDelay
 	opts.HeadBeforeGet = false
-	opts.Logger = log.New(b, "", 0)
 	opts.LogFlags = LogError | LogIgnored
 	c := NewCrawlerWithOptions(opts)
 	c.Run("http://hostb/page1.html")
@@ -278,7 +260,6 @@ func TestAllHead(t *testing.T) {
 	var calledWithHead int
 	var calledWithoutHead int
 
-	b := new(bytes.Buffer)
 	ff := newFileFetcher(new(DefaultExtender))
 
 	spy := newSpyExtenderFunc(eMKFetch, func(u *url.URL, userAgent string, headRequest bool) (res *http.Response, err error) {
@@ -294,7 +275,6 @@ func TestAllHead(t *testing.T) {
 	opts.SameHostOnly = true
 	opts.CrawlDelay = DefaultTestCrawlDelay
 	opts.HeadBeforeGet = true
-	opts.Logger = log.New(b, "", 0)
 	opts.LogFlags = LogError | LogIgnored
 	c := NewCrawlerWithOptions(opts)
 	c.Run("http://hosta/page1.html")
@@ -311,7 +291,6 @@ func TestAllHeadWithFetchError(t *testing.T) {
 	var calledWithHead int
 	var calledWithoutHead int
 
-	b := new(bytes.Buffer)
 	ff := newFileFetcher(new(DefaultExtender))
 
 	spy := newSpyExtenderFunc(eMKFetch, func(u *url.URL, userAgent string, headRequest bool) (res *http.Response, err error) {
@@ -330,7 +309,6 @@ func TestAllHeadWithFetchError(t *testing.T) {
 	opts.SameHostOnly = true
 	opts.CrawlDelay = DefaultTestCrawlDelay
 	opts.HeadBeforeGet = true
-	opts.Logger = log.New(b, "", 0)
 	opts.LogFlags = LogError | LogIgnored
 	c := NewCrawlerWithOptions(opts)
 	c.Run("http://hostb/page1.html")
@@ -348,7 +326,6 @@ func TestRequestGetFalse(t *testing.T) {
 	var calledWithHead int
 	var calledWithoutHead int
 
-	b := new(bytes.Buffer)
 	ff := newFileFetcher(new(DefaultExtender))
 
 	spy := newSpyExtenderFunc(eMKFetch, func(u *url.URL, userAgent string, headRequest bool) (res *http.Response, err error) {
@@ -371,7 +348,6 @@ func TestRequestGetFalse(t *testing.T) {
 	opts.SameHostOnly = true
 	opts.CrawlDelay = DefaultTestCrawlDelay
 	opts.HeadBeforeGet = true
-	opts.Logger = log.New(b, "", 0)
 	opts.LogFlags = LogError | LogIgnored
 	c := NewCrawlerWithOptions(opts)
 	c.Run("http://hosta/page1.html")
@@ -414,7 +390,6 @@ func TestHeadTrueFilterOverride(t *testing.T) {
 	opts.CrawlDelay = DefaultTestCrawlDelay
 	opts.HeadBeforeGet = true
 	opts.LogFlags = LogAll
-	opts.Logger = log.New(new(bytes.Buffer), "", 0)
 	c := NewCrawlerWithOptions(opts)
 	c.Run("http://hosta/page1.html")
 
@@ -459,7 +434,6 @@ func TestHeadFalseFilterOverride(t *testing.T) {
 	opts.CrawlDelay = DefaultTestCrawlDelay
 	opts.HeadBeforeGet = false
 	opts.LogFlags = LogAll
-	opts.Logger = log.New(new(bytes.Buffer), "", 0)
 	c := NewCrawlerWithOptions(opts)
 	c.Run("http://hosta/page1.html")
 
@@ -495,7 +469,6 @@ func TestHeadResponse(t *testing.T) {
 	opts.CrawlDelay = DefaultTestCrawlDelay
 	opts.HeadBeforeGet = true
 	opts.LogFlags = LogAll
-	opts.Logger = log.New(new(bytes.Buffer), "", 0)
 	opts.MaxVisits = 1
 	c := NewCrawlerWithOptions(opts)
 	c.Run("http://provok.in")
@@ -534,7 +507,6 @@ func TestCrawlDelay(t *testing.T) {
 	opts.CrawlDelay = DefaultTestCrawlDelay
 	opts.HeadBeforeGet = true
 	opts.LogFlags = LogAll
-	opts.Logger = log.New(new(bytes.Buffer), "", 0)
 	c := NewCrawlerWithOptions(opts)
 	last = time.Now()
 	c.Run("http://hosta/page1.html")

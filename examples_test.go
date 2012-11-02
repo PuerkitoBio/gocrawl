@@ -2,10 +2,8 @@ package gocrawl
 
 import (
 	"github.com/PuerkitoBio/goquery"
-	"log"
 	"net/http"
 	"net/url"
-	"os"
 	"regexp"
 	"time"
 )
@@ -39,7 +37,6 @@ func ExampleCrawl() {
 	opts := NewOptions(new(ExampleExtender))
 	opts.CrawlDelay = 1 * time.Second
 	opts.LogFlags = LogError
-	opts.Logger = log.New(os.Stdout, "", 0)
 
 	// Play nice with ddgo when running the test!
 	opts.MaxVisits = 2

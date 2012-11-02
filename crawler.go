@@ -72,7 +72,7 @@ func (this *Crawler) Run(seeds ...string) {
 // Initialize the Crawler's internal fields before a crawling execution.
 func (this *Crawler) init(seeds []string) []*url.URL {
 	// Helper log function, takes care of filtering based on level
-	this.logFunc = getLogFunc(this.Options.Logger, this.Options.LogFlags, -1)
+	this.logFunc = getLogFunc(this.Options.Extender, this.Options.LogFlags, -1)
 
 	// Parse the seeds and get the host count
 	parsedSeeds, hostCount := this.parseSeeds(seeds)
@@ -147,7 +147,7 @@ func (this *Crawler) launchWorker(u *url.URL) *worker {
 		this.Options.WorkerIdleTTL,
 		nil,
 		this.Options.Extender,
-		getLogFunc(this.Options.Logger, this.Options.LogFlags, i),
+		getLogFunc(this.Options.Extender, this.Options.LogFlags, i),
 		nil,
 		0}
 

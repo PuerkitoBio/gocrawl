@@ -2,7 +2,6 @@ package gocrawl
 
 import (
 	"fmt"
-	"log"
 )
 
 type LogFlags uint
@@ -18,18 +17,12 @@ const (
 	LogAll  LogFlags = LogError | LogInfo | LogEnqueued | LogIgnored | LogTrace
 )
 
-func getLogFunc(logger *log.Logger, level LogFlags, workerIndex int) func(LogFlags, string, ...interface{}) {
+func getLogFunc(ext Extender, verbosity LogFlags, workerIndex int) func(LogFlags, string, ...interface{}) {
 	return func(minLevel LogFlags, format string, vals ...interface{}) {
-		if logger != nil {
-			if workerIndex > 0 {
-				if level&minLevel == minLevel {
-					logger.Printf(fmt.Sprintf("worker %d - %s", workerIndex, format), vals...)
-				}
-			} else {
-				if level&minLevel == minLevel {
-					logger.Printf(format, vals...)
-				}
-			}
+		if workerIndex > 0 {
+			ext.Log(verbosity, minLevel, fmt.Sprintf(fmt.Sprintf("worker %d - %s", workerIndex, format), vals...))
+		} else {
+			ext.Log(verbosity, minLevel, fmt.Sprintf(format, vals...))
 		}
 	}
 }

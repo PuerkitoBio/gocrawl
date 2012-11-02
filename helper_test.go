@@ -3,7 +3,6 @@ package gocrawl
 import (
 	"bytes"
 	"github.com/PuerkitoBio/goquery"
-	"log"
 	"net/http"
 	"net/url"
 	"os"
@@ -80,6 +79,7 @@ type spyExtender struct {
 	fileFetcherExtender
 	callCount map[extensionMethodKey]int64
 	methods   map[extensionMethodKey]interface{}
+	b         bytes.Buffer
 }
 
 type callCounter interface {
@@ -97,7 +97,9 @@ func (this *spyExtender) incCallCount(key extensionMethodKey, delta int64) {
 
 func newSpyExtender(v func(*http.Response, *goquery.Document) ([]*url.URL, bool),
 	f func(*url.URL, *url.URL, bool) (bool, int, HeadRequestMode)) *spyExtender {
-	spy := &spyExtender{fileFetcherExtender{}, make(map[extensionMethodKey]int64, eMKLast), make(map[extensionMethodKey]interface{}, 2)}
+	spy := &spyExtender{fileFetcherExtender: fileFetcherExtender{},
+		callCount: make(map[extensionMethodKey]int64, eMKLast),
+		methods:   make(map[extensionMethodKey]interface{}, 2)}
 	if v != nil {
 		spy.setExtensionMethod(eMKVisit, v)
 	}
@@ -141,6 +143,12 @@ func newSpyExtenderConfigured(visitDelay time.Duration, returnUrls []*url.URL, d
 		return false, 0, HrmDefault
 	}
 	return newSpyExtender(v, f)
+}
+
+func (this *spyExtender) Log(logFlags LogFlags, msgLevel LogFlags, msg string) {
+	if logFlags&msgLevel == msgLevel {
+		this.b.WriteString(msg)
+	}
 }
 
 func (this *spyExtender) Visit(res *http.Response, doc *goquery.Document) ([]*url.URL, bool) {
@@ -243,17 +251,14 @@ func (this *spyExtender) Disallowed(u *url.URL) {
 	this.fileFetcherExtender.Disallowed(u)
 }
 
-func runFileFetcherWithOptions(opts *Options, urlSel []string, seeds []string) (spy *spyExtender, b *bytes.Buffer) {
-	// Initialize log, spies and crawler
-	b = new(bytes.Buffer)
+func runFileFetcherWithOptions(opts *Options, urlSel []string, seeds []string) (spy *spyExtender) {
 	spy = newSpyExtenderConfigured(0, nil, true, 0, urlSel...)
 
 	opts.Extender = spy
-	opts.Logger = log.New(b, "", 0)
 	c := NewCrawlerWithOptions(opts)
 
 	c.Run(seeds...)
-	return spy, b
+	return spy
 }
 
 func assertIsInLog(buf bytes.Buffer, s string, t *testing.T) {
