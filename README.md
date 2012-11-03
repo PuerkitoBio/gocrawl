@@ -39,10 +39,8 @@ package gocrawl
 
 import (
   "github.com/PuerkitoBio/goquery"
-  "log"
   "net/http"
   "net/url"
-  "os"
   "regexp"
   "time"
 )
@@ -75,8 +73,7 @@ func ExampleCrawl() {
   // Set custom options
   opts := NewOptions(new(ExampleExtender))
   opts.CrawlDelay = 1 * time.Second
-  opts.LogFlags = LogError
-  opts.Logger = log.New(os.Stdout, "", 0)
+  opts.LogFlags = LogError | LogInfo
 
   // Play nice with ddgo when running the test!
   opts.MaxVisits = 2
@@ -87,7 +84,7 @@ func ExampleCrawl() {
 
   // Remove "x" before Output: to activate the example (will run on go test)
 
-  // xOutput: 
+  // xOutput: voluntarily fail to see log output
 }
 ```
 
@@ -129,23 +126,21 @@ The `Options` type provides the hooks and customizations offered by gocrawl. All
 
 *    **UserAgent** : The user-agent string used to fetch the pages. Defaults to the Firefox 15 on Windows user-agent string.
 
-*    **RobotUserAgent** : The robot's user-agent string used to fetch and query robots.txt for permission to crawl an URL. Defaults to `Googlebot (gocrawl vM.m)` where `M.m` is the major and minor version of gocrawl. Because of the way the [robots exclusion protocol][robprot] works ([full specification as interpreted by Google here][robspec]), the user-agent string should *start* with a well-known robot name so that it (most likely) behaves as intended by the site owner. It is good practice to include contact information should the site owner need to contact you.
+*    **RobotUserAgent** : The robot's user-agent string used to fetch and query robots.txt for permission to crawl an URL. Defaults to `Googlebot (gocrawl vM.m)` where `M.m` is the major and minor version of gocrawl. See the [robots exclusion protocol][robprot] ([full specification as interpreted by Google here][robspec]) for details about the rule-matching based on the robot's user agent. It is good practice to include contact information in the user agent should the site owner need to contact you.
 
 *    **MaxVisits** : The maximum number of pages *visited* before stopping the crawl. Probably more useful for development purposes. Note that the Crawler will send its stop signal once this number of visits is reached, but workers may be in the process of visiting other pages, so when the crawling stops, the number of pages visited will be *at least* MaxVisits, possibly more (worst case is `MaxVisits + number of active workers`). Defaults to zero, no maximum.
 
-*    **CrawlDelay** : The time to wait between each request to the same host. The delay starts as soon as the response is received from the host. This is a `time.Duration` type, so it can be specified with `5 * time.Second` for example (which is the default value, 5 seconds). **If a crawl delay is specified in the robots.txt file, in the group matching the robot's user-agent, by default this delay is used instead**. Crawl delay can be customized by implementing the `ComputeDelay` extender function.
+*    **CrawlDelay** : The time to wait between each request to the same host. The delay starts as soon as the response is received from the host. This is a `time.Duration` type, so it can be specified with `5 * time.Second` for example (which is the default value, 5 seconds). **If a crawl delay is specified in the robots.txt file, in the group matching the robot's user-agent, by default this delay is used instead**. Crawl delay can be customized further by implementing the `ComputeDelay` extender function.
 
 *    **WorkerIdleTTL** : The idle time-to-live allowed for a worker before it is cleared (its goroutine terminated). Defaults to 10 seconds. The crawl delay is not part of idle time, this is specifically the time when the worker is available, but there are no URLs to process.
 
 *    **SameHostOnly** : Limit the URLs to enqueue only to those links targeting the same host, which is `true` by default.
 
-*    **HeadBeforeGet** : Asks the crawler to issue a HEAD request (and a subsequent `RequestGet()` method call) before making the eventual GET request. This is set to `false` by default. See also the `Filter()` extender method.
+*    **HeadBeforeGet** : Asks the crawler to issue a HEAD request (and a subsequent `RequestGet()` extender method call) before making the eventual GET request. This is set to `false` by default. See also the `Filter()` extender method.
 
 *    **URLNormalizationFlags** : The flags to apply when normalizing the URL using the [purell][] library. The URLs found by crawling a page are normalized before being submitted to the `Filter` extender function (to determine if they should be visited or not). Defaults to the most aggressive normalization allowed by purell, `purell.FlagsAllGreedy`.
 
-*    **Logger** : An instance of Go's built-in `*log.Logger` type. It can be created by calling `log.New()`. By default, a logger that prints to the standard output is used.
-
-*    **LogFlags** : The level of verbosity for the logger. Defaults to errors only (`LogError`). Can be a set of flags (i.e. `LogError | LogTrace`).
+*    **LogFlags** : The level of verbosity for logging. Defaults to errors only (`LogError`). Can be a set of flags (i.e. `LogError | LogTrace`).
 
 *    **Extender** : The instance implementing the `Extender` interface. This implements the various callbacks offered by gocrawl. Must be specified when creating a `Crawler` (or when creating an `Options` to pass to `NewCrawlerWithOptions` constructor). A default extender is provided as a valid default implementation, `DefaultExtender`. It can be used to implement a custom extender when not all methods need customization (see the example above).
 
@@ -156,6 +151,8 @@ This last option field, `Extender`, is crucial in using gocrawl, so here are the
 *    **End** : `End(reason EndReason)`. Called when the crawling ends, with an [`EndReason`][er] flag as argument.
 
 *    **Error** : `Error(err *CrawlError)`. Called when an error occurs. Errors do **not** stop the crawling execution. A [`CrawlError`][ce] instance is passed as argument. This specialized error implementation includes - among other interesting fields - a `Kind` field that indicates the step where the error occurred.
+
+*    **Log** : `Log(logFlags LogFlags, msgLevel LogFlags, msg string)`. The logging function. By default, prints to the standard error (Stderr), and outputs only the messages with a level included in the `LogFlags` option. If a custom `Log()` method is implemented, it is up to you to validate if the message should be considered, based on the level of verbosity requested (i.e. `if logFlags&msgLevel == msgLevel ...`), since the method always gets called for all messages.
 
 *    **ComputeDelay** : `ComputeDelay(host string, di *DelayInfo, lastFetch *FetchInfo) time.Duration`. Called by a worker before requesting a URL. Arguments are the host's name, the crawl delay information (delays from the Options struct, from the robots.txt, and the last used delay), and the last fetch information, so that it is possible to adapt to the current responsiveness of the host. It returns the delay to use. 
 

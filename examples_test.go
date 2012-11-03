@@ -36,7 +36,7 @@ func ExampleCrawl() {
 	// Set custom options
 	opts := NewOptions(new(ExampleExtender))
 	opts.CrawlDelay = 1 * time.Second
-	opts.LogFlags = LogError
+	opts.LogFlags = LogError | LogInfo
 
 	// Play nice with ddgo when running the test!
 	opts.MaxVisits = 2
@@ -47,5 +47,5 @@ func ExampleCrawl() {
 
 	// Remove "x" before Output: to activate the example (will run on go test)
 
-	// xOutput: 
+	// xOutput: voluntarily fail to see log output
 }
