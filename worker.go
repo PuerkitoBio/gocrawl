@@ -48,7 +48,7 @@ type worker struct {
 // Start crawling the host.
 func (this *worker) run() {
 	defer func() {
-		this.logFunc(LogInfo, "worker done.\n")
+		this.logFunc(LogInfo, "worker done.")
 		this.wg.Done()
 	}()
 
@@ -56,7 +56,7 @@ func (this *worker) run() {
 	for {
 		var idleChan <-chan time.Time
 
-		this.logFunc(LogInfo, "waiting for pop...\n")
+		this.logFunc(LogInfo, "waiting for pop...")
 
 		// Initialize the idle timeout channel, if required
 		if this.idleTTL > 0 {
@@ -65,11 +65,11 @@ func (this *worker) run() {
 
 		select {
 		case <-this.stop:
-			this.logFunc(LogInfo, "stop signal received.\n")
+			this.logFunc(LogInfo, "stop signal received.")
 			return
 
 		case <-idleChan:
-			this.logFunc(LogInfo, "idle timeout received.\n")
+			this.logFunc(LogInfo, "idle timeout received.")
 			this.sendResponse(nil, false, nil, true)
 			return
 
@@ -78,7 +78,7 @@ func (this *worker) run() {
 			// Got a batch of urls to crawl, loop and check at each iteration if a stop 
 			// is received.
 			for _, cmd := range batch {
-				this.logFunc(LogInfo, "popped: %s\n", cmd.u.String())
+				this.logFunc(LogInfo, "popped: %s", cmd.u.String())
 
 				if isRobotsTxtUrl(cmd.u) {
 					this.requestRobotsTxt(cmd.u)
@@ -94,7 +94,7 @@ func (this *worker) run() {
 				// a batch of URLs.
 				select {
 				case <-this.stop:
-					this.logFunc(LogInfo, "stop signal received.\n")
+					this.logFunc(LogInfo, "stop signal received.")
 					return
 				default:
 					// Nothing, just continue...
@@ -110,7 +110,7 @@ func (this *worker) isAllowedPerRobotsPolicies(u *url.URL) bool {
 		// Is this URL allowed per robots.txt policy?
 		ok := this.robotsGroup.Test(u.Path)
 		if !ok {
-			this.logFunc(LogIgnored, "ignored on robots.txt policy: %s\n", u.String())
+			this.logFunc(LogIgnored, "ignored on robots.txt policy: %s", u.String())
 		}
 		return ok
 	}
@@ -136,7 +136,7 @@ func (this *worker) requestUrl(u *url.URL, headRequest bool) {
 		} else {
 			// Error based on status code received
 			this.extender.Error(newCrawlErrorMessage(res.Status, CekHttpStatusCode, u))
-			this.logFunc(LogError, "ERROR status code for %s: %s\n", u.String(), res.Status)
+			this.logFunc(LogError, "ERROR status code for %s: %s", u.String(), res.Status)
 		}
 		this.sendResponse(u, visited, harvested, false)
 	}
@@ -146,7 +146,7 @@ func (this *worker) requestUrl(u *url.URL, headRequest bool) {
 func (this *worker) requestRobotsTxt(u *url.URL) {
 	// Ask if it should be fetched
 	if reqRob, robData := this.extender.RequestRobots(u, this.robotUserAgent); !reqRob {
-		this.logFunc(LogInfo, "using robots.txt from cache\n")
+		this.logFunc(LogInfo, "using robots.txt from cache")
 		this.robotsGroup = this.getRobotsTxtGroup(robData, nil)
 
 	} else {
@@ -183,7 +183,7 @@ func (this *worker) getRobotsTxtGroup(b []byte, res *http.Response) (g *robotstx
 	// robots.txt is similar behavior.
 	if e != nil {
 		this.extender.Error(newCrawlError(e, CekParseRobots, nil))
-		this.logFunc(LogError, "ERROR parsing robots.txt for host %s: %s\n", this.host, e.Error())
+		this.logFunc(LogError, "ERROR parsing robots.txt for host %s: %s", this.host, e.Error())
 	} else {
 		g = data.FindGroup(this.robotUserAgent)
 	}
@@ -202,7 +202,7 @@ func (this *worker) setCrawlDelay() {
 			robDelay,
 			this.lastCrawlDelay},
 		this.lastFetch)
-	this.logFunc(LogInfo, "using crawl-delay: %v\n", this.lastCrawlDelay)
+	this.logFunc(LogInfo, "using crawl-delay: %v", this.lastCrawlDelay)
 }
 
 // Request the specified URL and return the response.
@@ -211,7 +211,7 @@ func (this *worker) fetchUrl(u *url.URL, agent string, headRequest bool) (res *h
 
 	for {
 		// Wait for crawl delay, if one is pending.
-		this.logFunc(LogTrace, "waiting for crawl delay\n")
+		this.logFunc(LogTrace, "waiting for crawl delay")
 		if this.wait != nil {
 			<-this.wait
 			this.wait = nil
@@ -230,7 +230,7 @@ func (this *worker) fetchUrl(u *url.URL, agent string, headRequest bool) (res *h
 
 			// Notify error
 			this.extender.Error(newCrawlError(e, CekFetch, u))
-			this.logFunc(LogError, "ERROR fetching %s: %s\n", u.String(), e.Error())
+			this.logFunc(LogError, "ERROR fetching %s: %s", u.String(), e.Error())
 
 			// Return from this URL crawl
 			this.sendResponse(u, false, nil, false)
@@ -253,7 +253,7 @@ func (this *worker) fetchUrl(u *url.URL, agent string, headRequest bool) (res *h
 			headRequest = false
 			// Ask caller if we should proceed with a GET
 			if !this.extender.RequestGet(res) {
-				this.logFunc(LogIgnored, "ignored on HEAD filter policy: %s\n", u.String())
+				this.logFunc(LogIgnored, "ignored on HEAD filter policy: %s", u.String())
 				this.sendResponse(u, false, nil, false)
 				ok = false
 				break
@@ -275,7 +275,7 @@ func (this *worker) sendResponse(u *url.URL, visited bool, harvested []*url.URL,
 		// channel may be full and could block indefinitely.
 		select {
 		case <-this.stop:
-			this.logFunc(LogInfo, "ignoring send response, will stop.\n")
+			this.logFunc(LogInfo, "ignoring send response, will stop.")
 			// Put the signal back in stop channel, so that it is caught in the run() loop.
 			this.stop <- true
 			return
@@ -298,11 +298,11 @@ func (this *worker) visitUrl(res *http.Response) []*url.URL {
 	// Load a goquery document and call the visitor function
 	if bd, e := ioutil.ReadAll(res.Body); e != nil {
 		this.extender.Error(newCrawlError(e, CekReadBody, res.Request.URL))
-		this.logFunc(LogError, "ERROR reading body %s: %s\n", res.Request.URL.String(), e.Error())
+		this.logFunc(LogError, "ERROR reading body %s: %s", res.Request.URL.String(), e.Error())
 	} else {
 		if node, e := html.Parse(bytes.NewBuffer(bd)); e != nil {
 			this.extender.Error(newCrawlError(e, CekParseBody, res.Request.URL))
-			this.logFunc(LogError, "ERROR parsing %s: %s\n", res.Request.URL.String(), e.Error())
+			this.logFunc(LogError, "ERROR parsing %s: %s", res.Request.URL.String(), e.Error())
 		} else {
 			doc = goquery.NewDocumentFromNode(node)
 			doc.Url = res.Request.URL
@@ -318,7 +318,7 @@ func (this *worker) visitUrl(res *http.Response) []*url.URL {
 			harvested = this.processLinks(doc)
 		} else {
 			this.extender.Error(newCrawlErrorMessage("No goquery document to process links.", CekProcessLinks, res.Request.URL))
-			this.logFunc(LogError, "ERROR processing links %s\n", res.Request.URL.String())
+			this.logFunc(LogError, "ERROR processing links %s", res.Request.URL.String())
 		}
 	}
 	// Notify that this URL has been visited
@@ -340,7 +340,7 @@ func (this *worker) processLinks(doc *goquery.Document) (result []*url.URL) {
 				parsed = doc.Url.ResolveReference(parsed)
 				result = append(result, parsed)
 			} else {
-				this.logFunc(LogIgnored, "ignore on unparsable policy %s: %s\n", s, e.Error())
+				this.logFunc(LogIgnored, "ignore on unparsable policy %s: %s", s, e.Error())
 			}
 		}
 	}
