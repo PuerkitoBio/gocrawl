@@ -8,7 +8,7 @@ gocrawl is a polite, slim and concurrent web crawler written in Go.
 *    Crawl delays applied per host
 *    Obedience to robots.txt rules (using [robotstxt.go][robots] go library)
 *    Concurrent execution using goroutines
-*    Configurable logging using the builtin Go logger
+*    Configurable logging
 *    Open, customizable design by providing hooks into the execution logic
 
 ## Installation and dependencies

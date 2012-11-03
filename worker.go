@@ -271,6 +271,19 @@ func (this *worker) sendResponse(u *url.URL, visited bool, harvested []*url.URL,
 	// Push harvested urls back to crawler, even if empty (uses the channel communication
 	// to decrement reference count of pending URLs)
 	if !isRobotsTxtUrl(u) {
+		// If a stop signal has been received, ignore the response, since the push
+		// channel may be full and could block indefinitely.
+		select {
+		case <-this.stop:
+			this.logFunc(LogInfo, "ignoring send response, will stop.\n")
+			// Put the signal back in stop channel, so that it is caught in the run() loop.
+			this.stop <- true
+			return
+		default:
+			// Nothing, just continue...
+		}
+
+		// No stop signal, send the response
 		res := &workerResponse{this.host, visited, u, harvested, idleDeath}
 		this.push <- res
 	}

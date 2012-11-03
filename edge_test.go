@@ -4,7 +4,7 @@ import (
 	"testing"
 )
 
-func xTestBasicRealHttpRequests(t *testing.T) {
+func TestBasicRealHttpRequests(t *testing.T) {
 	c := NewCrawler(new(DefaultExtender))
 
 	c.Options.CrawlDelay = DefaultCrawlDelay
@@ -15,7 +15,7 @@ func xTestBasicRealHttpRequests(t *testing.T) {
 	c.Run("http://provok.in")
 }
 
-func xTestNonHtmlRequest(t *testing.T) {
+func TestNonHtmlRequest(t *testing.T) {
 	c := NewCrawler(new(DefaultExtender))
 
 	c.Options.CrawlDelay = DefaultCrawlDelay
