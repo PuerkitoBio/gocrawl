@@ -147,7 +147,7 @@ func newSpyExtenderConfigured(visitDelay time.Duration, returnUrls []*url.URL, d
 
 func (this *spyExtender) Log(logFlags LogFlags, msgLevel LogFlags, msg string) {
 	if logFlags&msgLevel == msgLevel {
-		this.b.WriteString(msg)
+		this.b.WriteString(msg + "\n")
 	}
 }
 
