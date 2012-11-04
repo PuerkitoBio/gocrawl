@@ -120,7 +120,7 @@ func (this *DefaultExtender) Error(err *CrawlError) {}
 // Log prints to the standard error by default, based on the requested log verbosity.
 func (this *DefaultExtender) Log(logFlags LogFlags, msgLevel LogFlags, msg string) {
 	if logFlags&msgLevel == msgLevel {
-		log.Print(msg)
+		log.Println(msg)
 	}
 }
 
