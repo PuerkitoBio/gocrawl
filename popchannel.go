@@ -21,7 +21,10 @@ func (this popChannel) stack(cmd ...*workerCommand) {
 		case this <- toStack:
 			return
 		case old := <-this:
-			toStack = append(old, cmd...)
+			// Content of the channel got emptied and is now in old, so append whatever
+			// is in toStack to it, so that it can either be inserted in the channel,
+			// or appended to some other content that got through in the meantime.
+			toStack = append(old, toStack...)
 		}
 	}
 }
