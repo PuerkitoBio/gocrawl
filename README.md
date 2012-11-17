@@ -196,6 +196,6 @@ The [BSD 3-Clause license][bsd].
 [exp]: http://code.google.com/p/go-wiki/wiki/InstallingExp
 [robprot]: http://www.robotstxt.org/robotstxt.html
 [robspec]: https://developers.google.com/webmasters/control-crawl-index/docs/robots_txt
-[godoc]: http://go.pkgdoc.org/github.com/puerkitobio/gocrawl
-[er]: http://go.pkgdoc.org/github.com/puerkitobio/gocrawl#EndReason
-[ce]: http://go.pkgdoc.org/github.com/puerkitobio/gocrawl#CrawlError
+[godoc]: http://go.pkgdoc.org/github.com/PuerkitoBio/gocrawl
+[er]: http://go.pkgdoc.org/github.com/PuerkitoBio/gocrawl#EndReason
+[ce]: http://go.pkgdoc.org/github.com/PuerkitoBio/gocrawl#CrawlError
