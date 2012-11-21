@@ -171,7 +171,7 @@ func (this *Crawler) enqueueUrls(res *workerResponse) (cnt int) {
 		var hr HeadRequestMode
 
 		// Normalize URL
-		purell.NormalizeURL(u, DefaultNormalizationFlags)
+		purell.NormalizeURL(u, this.Options.URLNormalizationFlags)
 		_, isVisited = this.visited[u.String()]
 
 		// Filter the URL - TODO : Priority is ignored at the moment
