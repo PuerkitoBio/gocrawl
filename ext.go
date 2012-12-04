@@ -102,7 +102,9 @@ type Extender interface {
 	Disallowed(u *url.URL)
 }
 
-type DefaultExtender struct{}
+type DefaultExtender struct {
+	EnqueueChan chan *CrawlerCommand
+}
 
 // Return the same seeds as those received (those that were passed
 // to Run() initially).

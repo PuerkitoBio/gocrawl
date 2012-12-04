@@ -4,26 +4,40 @@ package gocrawl
 import (
 	"github.com/PuerkitoBio/purell"
 	"net/url"
+	"reflect"
 	"runtime"
 	"strings"
 	"sync"
 )
 
-// Communication from worker to the master crawler
+// Communication from worker to the master crawler, about the crawling of a URL
 type workerResponse struct {
-	host    string
-	visited bool
-
+	host          string
+	visited       bool
 	sourceUrl     *url.URL
 	harvestedUrls []*url.URL
-
-	idleDeath bool
+	idleDeath     bool
 }
 
 // Communication from crawler to worker, about the URL to request
 type workerCommand struct {
 	u    *url.URL
 	head bool
+}
+
+type EnqueueSource int
+
+const (
+	EsSeed        EnqueueSource = iota // Seed URLs have this source
+	EsHarvest                          // URLs harvested from a visit to a page have this source
+	EsRedirect                         // URLs enqueued from a fetch redirection have this source by default
+	EsCustomStart                      // Custom EnqueueSources should start at this value instead of iota
+)
+
+// Communication from extender to crawler about an URL to enqueue
+type CrawlerCommand struct {
+	u      *url.URL
+	source EnqueueSource
 }
 
 // The crawler itself, the master of the whole process
@@ -33,6 +47,7 @@ type Crawler struct {
 	// Internal fields
 	logFunc   func(LogFlags, string, ...interface{})
 	push      chan *workerResponse
+	enqueue   chan *CrawlerCommand
 	wg        *sync.WaitGroup
 	endReason EndReason
 
@@ -96,8 +111,18 @@ func (this *Crawler) init(seeds []string) []*url.URL {
 	} else {
 		this.workers, this.push = make(map[string]*worker, 10*hostCount), make(chan *workerResponse, 10*hostCount)
 	}
+	// Create and pass the enqueue channel
+	this.enqueue = make(chan *CrawlerCommand, this.Options.EnqueueChanBuffer)
+	this.setExtenderEnqueueChan()
 
 	return parsedSeeds
+}
+
+func (this *Crawler) setExtenderEnqueueChan() {
+	v := reflect.ValueOf(this.Options.Extender)
+	ec := v.Elem().FieldByName("EnqueueChan")
+	src := reflect.ValueOf(this.enqueue)
+	ec.Set(src)
 }
 
 // Parse the seeds URL strings to URL objects, and return the URL objects slice,
