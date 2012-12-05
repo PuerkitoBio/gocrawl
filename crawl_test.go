@@ -4,6 +4,7 @@ import (
 	"errors"
 	"github.com/PuerkitoBio/goquery"
 	"io/ioutil"
+	"net"
 	"net/http"
 	"net/url"
 	"strings"
@@ -519,5 +520,42 @@ func TestCrawlDelay(t *testing.T) {
 		if d < min {
 			t.Errorf("Expected a delay of at least %v for fetch #%d, got %v.", min, i, d)
 		}
+	}
+}
+
+func TestUserAgent(t *testing.T) {
+	// Create crawler, with all defaults
+	c := NewCrawler(new(DefaultExtender))
+	c.Options.CrawlDelay = 10 * time.Millisecond
+
+	// Create server
+	l, err := net.Listen("tcp", ":8080")
+	if err != nil {
+		t.Fatal(err)
+	}
+	http.HandleFunc("/robots.txt", func(w http.ResponseWriter, r *http.Request) {
+		// Expect robots.txt user agent
+		if r.UserAgent() != c.Options.RobotUserAgent {
+			t.Errorf("Expected user-agent %s, got %s", c.Options.RobotUserAgent, r.UserAgent())
+		}
+	})
+	http.HandleFunc("/bidon", func(w http.ResponseWriter, r *http.Request) {
+		// Expect crawl user agent
+		if r.UserAgent() != c.Options.UserAgent {
+			t.Errorf("Expected user-agent %s, got %s", c.Options.UserAgent, r.UserAgent())
+		}
+	})
+
+	// Start server in a separate goroutine
+	go func() {
+		http.Serve(l, nil)
+	}()
+
+	// Go crawl
+	c.Run("http://localhost:8080/bidon")
+
+	// Close listener
+	if err = l.Close(); err != nil {
+		t.Fatal(err)
 	}
 }

@@ -103,7 +103,7 @@ type Extender interface {
 }
 
 type DefaultExtender struct {
-	EnqueueChan chan *CrawlerCommand
+	EnqueueChan chan<- *CrawlerCommand
 }
 
 // Return the same seeds as those received (those that were passed
