@@ -25,6 +25,8 @@ type workerCommand struct {
 	head bool
 }
 
+// EnqueueSource indicates to the crawler and the Filter extender function
+// the source of the URL.
 type EnqueueSource int
 
 const (
@@ -118,9 +120,38 @@ func (this *Crawler) init(seeds []string) []*url.URL {
 	return parsedSeeds
 }
 
+// Set the Enqueue channel on the extender, based on the naming convention.
 func (this *Crawler) setExtenderEnqueueChan() {
+	// Using reflection, check if the extender has a `EnqueueChan` field
+	// of type `chan<- *CrawlerCommand`. If it does, set it to the crawler's
+	// enqueue channel.
 	v := reflect.ValueOf(this.Options.Extender)
-	ec := v.Elem().FieldByName("EnqueueChan")
+	el := v.Elem()
+	if el.Kind() != reflect.Struct {
+		this.logFunc(LogInfo, "extender is not a struct, cannot set the enqueue channel")
+		return
+	}
+	ec := el.FieldByName("EnqueueChan")
+	if !ec.IsValid() {
+		this.logFunc(LogInfo, "extender.EnqueueChan does not exist, cannot set the enqueue channel")
+		return
+	}
+	t := ec.Type()
+	if t.Kind() != reflect.Chan || t.ChanDir() != reflect.SendDir {
+		this.logFunc(LogInfo, "extender.EnqueueChan is not of type chan<-*gocrawl.CrawlerCommand, cannot set the enqueue channel")
+		return
+	}
+	tt := t.Elem()
+	if tt.Kind() != reflect.Ptr {
+		this.logFunc(LogInfo, "extender.EnqueueChan is not of type chan<-*gocrawl.CrawlerCommand, cannot set the enqueue channel")
+		return
+	}
+	ttt := tt.Elem()
+	if ttt.Kind() != reflect.Struct || ttt.Name() != "CrawlerCommand" {
+		this.logFunc(LogInfo, "extender.EnqueueChan is not of type chan<-*gocrawl.CrawlerCommand, cannot set the enqueue channel")
+		return
+	}
+
 	src := reflect.ValueOf(this.enqueue)
 	ec.Set(src)
 }
