@@ -55,7 +55,7 @@ type Crawler struct {
 
 	// keep visited URLs in map, O(1) access time vs O(n) for slice. The byte value
 	// is of no use, but this is the smallest type possible.
-	visited         map[string]byte
+	visited         map[string]byte // TODO : Keep a count of visits instead of useless byte?
 	pushPopRefCount int
 	visits          int
 	workers         map[string]*worker
@@ -76,15 +76,16 @@ func NewCrawler(ext Extender) *Crawler {
 // Run starts the crawling process, based on the given seeds and the current
 // Options settings. Execution stops either when MaxVisits is reached (if specified)
 // or when no more URLs need visiting.
-func (this *Crawler) Run(seeds ...string) {
+func (this *Crawler) Run(seeds ...string) EndReason {
 	seeds = this.Options.Extender.Start(seeds)
 	parsedSeeds := this.init(seeds)
 
 	// Start with the seeds, and loop till death
-	this.enqueueUrls(&workerResponse{"", false, nil, parsedSeeds, false})
+	this.enqueueUrls(parsedSeeds, nil)
 	this.collectUrls()
 
 	this.Options.Extender.End(this.endReason)
+	return this.endReason
 }
 
 // Initialize the Crawler's internal fields before a crawling execution.
@@ -122,6 +123,13 @@ func (this *Crawler) init(seeds []string) []*url.URL {
 
 // Set the Enqueue channel on the extender, based on the naming convention.
 func (this *Crawler) setExtenderEnqueueChan() {
+	defer func() {
+		if err := recover(); err != nil {
+			// Don't panic
+			this.logFunc(LogError, "cannot set the enqueue channel: %s", err)
+		}
+	}()
+
 	// Using reflection, check if the extender has a `EnqueueChan` field
 	// of type `chan<- *CrawlerCommand`. If it does, set it to the crawler's
 	// enqueue channel.
@@ -221,8 +229,8 @@ func (this *Crawler) launchWorker(u *url.URL) *worker {
 
 // Enqueue the URLs returned from the worker, as long as it complies with the
 // selection policies.
-func (this *Crawler) enqueueUrls(res *workerResponse) (cnt int) {
-	for _, u := range res.harvestedUrls {
+func (this *Crawler) enqueueUrls(harvestedUrls []*url.URL, sourceUrl *url.URL) (cnt int) {
+	for _, u := range harvestedUrls {
 		var isVisited, enqueue, head bool
 		var hr HeadRequestMode
 
@@ -231,7 +239,7 @@ func (this *Crawler) enqueueUrls(res *workerResponse) (cnt int) {
 		_, isVisited = this.visited[u.String()]
 
 		// Filter the URL - TODO : Priority is ignored at the moment
-		if enqueue, _, hr = this.Options.Extender.Filter(u, res.sourceUrl, isVisited); !enqueue {
+		if enqueue, _, hr = this.Options.Extender.Filter(u, sourceUrl, isVisited); !enqueue {
 			// Filter said NOT to use this url, so continue with next
 			this.logFunc(LogIgnored, "ignore on filter policy: %s", u.String())
 			continue
@@ -246,7 +254,7 @@ func (this *Crawler) enqueueUrls(res *workerResponse) (cnt int) {
 		} else if !strings.HasPrefix(u.Scheme, "http") {
 			this.logFunc(LogIgnored, "ignore on scheme policy: %s", u.String())
 
-		} else if res.sourceUrl != nil && u.Host != res.sourceUrl.Host && this.Options.SameHostOnly {
+		} else if sourceUrl != nil && u.Host != sourceUrl.Host && this.Options.SameHostOnly {
 			// Only allow URLs coming from the same host
 			this.logFunc(LogIgnored, "ignore on same host policy: %s", u.String())
 
@@ -264,14 +272,14 @@ func (this *Crawler) enqueueUrls(res *workerResponse) (cnt int) {
 					this.logFunc(LogError, "ERROR parsing robots.txt from %s: %s", u.String(), e.Error())
 				} else {
 					this.logFunc(LogEnqueued, "enqueue: %s", robUrl.String())
-					this.Options.Extender.Enqueued(robUrl, res.sourceUrl)
+					this.Options.Extender.Enqueued(robUrl, sourceUrl)
 					w.pop.stack(&workerCommand{robUrl, false})
 				}
 			}
 
 			cnt++
 			this.logFunc(LogEnqueued, "enqueue: %s", u.String())
-			this.Options.Extender.Enqueued(u, res.sourceUrl)
+			this.Options.Extender.Enqueued(u, sourceUrl)
 			switch hr {
 			case HrmIgnore:
 				head = false
@@ -328,9 +336,14 @@ func (this *Crawler) collectUrls() {
 				delete(this.workers, res.host)
 				this.logFunc(LogInfo, "worker for host %s cleared on idle policy", res.host)
 			} else {
-				this.enqueueUrls(res)
+				this.enqueueUrls(res.harvestedUrls, res.sourceUrl)
 				this.pushPopRefCount--
 			}
+
+		case enq := <-this.enqueue:
+			// Received a command to enqueue a URL, proceed
+			// TODO : Receive the source URL? Or validate same host policy based on original host slice?
+			this.enqueueUrls([]*url.URL{enq.u}, nil)
 
 		default:
 			// Check if refcount is zero
