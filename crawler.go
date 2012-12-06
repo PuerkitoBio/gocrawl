@@ -25,21 +25,21 @@ type workerCommand struct {
 	head bool
 }
 
-// EnqueueSource indicates to the crawler and the Filter extender function
-// the source of the URL.
-type EnqueueSource int
+// EnqueueOrigin indicates to the crawler and the Filter extender function
+// the origin of this URL.
+type EnqueueOrigin int
 
 const (
-	EsSeed        EnqueueSource = iota // Seed URLs have this source
-	EsHarvest                          // URLs harvested from a visit to a page have this source
-	EsRedirect                         // URLs enqueued from a fetch redirection have this source by default
-	EsCustomStart                      // Custom EnqueueSources should start at this value instead of iota
+	EoSeed        EnqueueOrigin = iota // Seed URLs have this source
+	EoHarvest                          // URLs harvested from a visit to a page have this source
+	EoRedirect                         // URLs enqueued from a fetch redirection have this source by default
+	EoCustomStart                      // Custom EnqueueOrigins should start at this value instead of iota
 )
 
 // Communication from extender to crawler about an URL to enqueue
 type CrawlerCommand struct {
-	u      *url.URL
-	source EnqueueSource
+	URL    *url.URL
+	Origin EnqueueOrigin
 }
 
 // The crawler itself, the master of the whole process
@@ -81,7 +81,7 @@ func (this *Crawler) Run(seeds ...string) EndReason {
 	parsedSeeds := this.init(seeds)
 
 	// Start with the seeds, and loop till death
-	this.enqueueUrls(parsedSeeds, nil)
+	this.enqueueUrls(parsedSeeds, nil, EoSeed)
 	this.collectUrls()
 
 	this.Options.Extender.End(this.endReason)
@@ -125,7 +125,8 @@ func (this *Crawler) init(seeds []string) []*url.URL {
 func (this *Crawler) setExtenderEnqueueChan() {
 	defer func() {
 		if err := recover(); err != nil {
-			// Don't panic
+			// Panic can happen if the field exists on a pointer struct, but that
+			// pointer is nil.
 			this.logFunc(LogError, "cannot set the enqueue channel: %s", err)
 		}
 	}()
@@ -229,7 +230,7 @@ func (this *Crawler) launchWorker(u *url.URL) *worker {
 
 // Enqueue the URLs returned from the worker, as long as it complies with the
 // selection policies.
-func (this *Crawler) enqueueUrls(harvestedUrls []*url.URL, sourceUrl *url.URL) (cnt int) {
+func (this *Crawler) enqueueUrls(harvestedUrls []*url.URL, sourceUrl *url.URL, origin EnqueueOrigin) (cnt int) {
 	for _, u := range harvestedUrls {
 		var isVisited, enqueue, head bool
 		var hr HeadRequestMode
@@ -239,7 +240,7 @@ func (this *Crawler) enqueueUrls(harvestedUrls []*url.URL, sourceUrl *url.URL) (
 		_, isVisited = this.visited[u.String()]
 
 		// Filter the URL - TODO : Priority is ignored at the moment
-		if enqueue, _, hr = this.Options.Extender.Filter(u, sourceUrl, isVisited); !enqueue {
+		if enqueue, _, hr = this.Options.Extender.Filter(u, sourceUrl, isVisited, origin); !enqueue {
 			// Filter said NOT to use this url, so continue with next
 			this.logFunc(LogIgnored, "ignore on filter policy: %s", u.String())
 			continue
@@ -336,14 +337,14 @@ func (this *Crawler) collectUrls() {
 				delete(this.workers, res.host)
 				this.logFunc(LogInfo, "worker for host %s cleared on idle policy", res.host)
 			} else {
-				this.enqueueUrls(res.harvestedUrls, res.sourceUrl)
+				this.enqueueUrls(res.harvestedUrls, res.sourceUrl, EoHarvest)
 				this.pushPopRefCount--
 			}
 
 		case enq := <-this.enqueue:
 			// Received a command to enqueue a URL, proceed
 			// TODO : Receive the source URL? Or validate same host policy based on original host slice?
-			this.enqueueUrls([]*url.URL{enq.u}, nil)
+			this.enqueueUrls([]*url.URL{enq.URL}, nil, enq.Origin)
 
 		default:
 			// Check if refcount is zero

@@ -214,7 +214,7 @@ func TestComputeDelay(t *testing.T) {
 }
 
 func TestFilter(t *testing.T) {
-	spy := newSpyExtenderFunc(eMKFilter, func(u *url.URL, from *url.URL, isVisited bool) (enqueue bool, priority int, hrm HeadRequestMode) {
+	spy := newSpyExtenderFunc(eMKFilter, func(u *url.URL, from *url.URL, isVisited bool, o EnqueueOrigin) (enqueue bool, priority int, hrm HeadRequestMode) {
 		return strings.HasSuffix(u.Path, "page1.html"), 0, HrmDefault
 	})
 
@@ -377,7 +377,7 @@ func TestHeadTrueFilterOverride(t *testing.T) {
 	})
 
 	// Page2: No get, Page3: No enqueue
-	spy.setExtensionMethod(eMKFilter, func(u *url.URL, from *url.URL, isVisited bool) (enqueue bool, priority int, headRequest HeadRequestMode) {
+	spy.setExtensionMethod(eMKFilter, func(u *url.URL, from *url.URL, isVisited bool, o EnqueueOrigin) (enqueue bool, priority int, headRequest HeadRequestMode) {
 		if u.Path == "/page2.html" {
 			return !isVisited, 0, HrmIgnore
 		} else if u.Path == "/page3.html" {
@@ -421,7 +421,7 @@ func TestHeadFalseFilterOverride(t *testing.T) {
 	})
 
 	// Page1: default, Page2: Head before get, Page3: No enqueue
-	spy.setExtensionMethod(eMKFilter, func(u *url.URL, from *url.URL, isVisited bool) (enqueue bool, priority int, headRequest HeadRequestMode) {
+	spy.setExtensionMethod(eMKFilter, func(u *url.URL, from *url.URL, isVisited bool, o EnqueueOrigin) (enqueue bool, priority int, headRequest HeadRequestMode) {
 		if u.Path == "/page2.html" {
 			return !isVisited, 0, HrmRequest
 		} else if u.Path == "/page3.html" {

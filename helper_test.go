@@ -96,7 +96,7 @@ func (this *spyExtender) incCallCount(key extensionMethodKey, delta int64) {
 }
 
 func newSpyExtender(v func(*http.Response, *goquery.Document) ([]*url.URL, bool),
-	f func(*url.URL, *url.URL, bool) (bool, int, HeadRequestMode)) *spyExtender {
+	f func(*url.URL, *url.URL, bool, EnqueueOrigin) (bool, int, HeadRequestMode)) *spyExtender {
 	spy := &spyExtender{fileFetcherExtender: fileFetcherExtender{},
 		callCount: make(map[extensionMethodKey]int64, eMKLast),
 		methods:   make(map[extensionMethodKey]interface{}, 2)}
@@ -129,7 +129,7 @@ func newSpyExtenderConfigured(visitDelay time.Duration, returnUrls []*url.URL, d
 		return returnUrls, doLinks
 	}
 
-	f := func(target *url.URL, origin *url.URL, isVisited bool) (bool, int, HeadRequestMode) {
+	f := func(target *url.URL, from *url.URL, isVisited bool, origin EnqueueOrigin) (bool, int, HeadRequestMode) {
 		time.Sleep(filterDelay)
 		if len(filterWhitelist) == 1 && filterWhitelist[0] == "*" {
 			// Allow all, unless already visited
@@ -159,12 +159,12 @@ func (this *spyExtender) Visit(res *http.Response, doc *goquery.Document) ([]*ur
 	return this.fileFetcherExtender.Visit(res, doc)
 }
 
-func (this *spyExtender) Filter(target *url.URL, origin *url.URL, isVisited bool) (bool, int, HeadRequestMode) {
+func (this *spyExtender) Filter(target *url.URL, from *url.URL, isVisited bool, origin EnqueueOrigin) (bool, int, HeadRequestMode) {
 	this.incCallCount(eMKFilter, 1)
-	if f, ok := this.methods[eMKFilter].(func(target *url.URL, origin *url.URL, isVisited bool) (bool, int, HeadRequestMode)); ok {
-		return f(target, origin, isVisited)
+	if f, ok := this.methods[eMKFilter].(func(target *url.URL, from *url.URL, isVisited bool, origin EnqueueOrigin) (bool, int, HeadRequestMode)); ok {
+		return f(target, from, isVisited, origin)
 	}
-	return this.fileFetcherExtender.Filter(target, origin, isVisited)
+	return this.fileFetcherExtender.Filter(target, from, isVisited, origin)
 }
 
 func (this *spyExtender) Start(seeds []string) []string {

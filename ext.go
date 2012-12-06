@@ -95,7 +95,7 @@ type Extender interface {
 	RequestRobots(u *url.URL, robotAgent string) (request bool, data []byte)
 	FetchedRobots(res *http.Response)
 
-	Filter(u *url.URL, from *url.URL, isVisited bool) (enqueue bool, priority int, headRequest HeadRequestMode)
+	Filter(u *url.URL, from *url.URL, isVisited bool, origin EnqueueOrigin) (enqueue bool, priority int, headRequest HeadRequestMode)
 	Enqueued(u *url.URL, from *url.URL)
 	Visit(*http.Response, *goquery.Document) (harvested []*url.URL, findLinks bool)
 	Visited(u *url.URL, harvested []*url.URL)
@@ -168,7 +168,7 @@ func (this *DefaultExtender) RequestRobots(u *url.URL, robotAgent string) (reque
 func (this *DefaultExtender) FetchedRobots(res *http.Response) {}
 
 // Enqueue the URL if it hasn't been visited yet.
-func (this *DefaultExtender) Filter(u *url.URL, from *url.URL, isVisited bool) (enqueue bool, priority int, headRequest HeadRequestMode) {
+func (this *DefaultExtender) Filter(u *url.URL, from *url.URL, isVisited bool, origin EnqueueOrigin) (enqueue bool, priority int, headRequest HeadRequestMode) {
 	return !isVisited, 0, HrmDefault
 }
 
