@@ -110,9 +110,11 @@ func (this *Crawler) init(seeds []string) []*url.URL {
 	// Create the workers map and the push channel (the channel used by workers
 	// to communicate back to the crawler)
 	if this.Options.SameHostOnly {
-		this.workers, this.push = make(map[string]*worker, hostCount), make(chan *workerResponse, hostCount)
+		this.workers, this.push = make(map[string]*worker, hostCount),
+			make(chan *workerResponse, hostCount)
 	} else {
-		this.workers, this.push = make(map[string]*worker, 10*hostCount), make(chan *workerResponse, 10*hostCount)
+		this.workers, this.push = make(map[string]*worker, this.Options.HostBufferFactor*hostCount),
+			make(chan *workerResponse, this.Options.HostBufferFactor*hostCount)
 	}
 	// Create and pass the enqueue channel
 	this.enqueue = make(chan *CrawlerCommand, this.Options.EnqueueChanBuffer)
