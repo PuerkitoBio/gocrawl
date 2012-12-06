@@ -102,6 +102,7 @@ type Extender interface {
 	Disallowed(u *url.URL)
 }
 
+// Default working implementation of an extender.
 type DefaultExtender struct {
 	EnqueueChan chan<- *CrawlerCommand
 }

@@ -76,7 +76,7 @@ func (this *fileFetcherExtender) Fetch(u *url.URL, userAgent string, headRequest
 // The spy extender extends the file fetcher and allows counting the number of
 // calls for each extender method.
 type spyExtender struct {
-	fileFetcherExtender
+	*fileFetcherExtender
 	callCount map[extensionMethodKey]int64
 	methods   map[extensionMethodKey]interface{}
 	b         bytes.Buffer
@@ -97,7 +97,7 @@ func (this *spyExtender) incCallCount(key extensionMethodKey, delta int64) {
 
 func newSpyExtender(v func(*http.Response, *goquery.Document) ([]*url.URL, bool),
 	f func(*url.URL, *url.URL, bool, EnqueueOrigin) (bool, int, HeadRequestMode)) *spyExtender {
-	spy := &spyExtender{fileFetcherExtender: fileFetcherExtender{},
+	spy := &spyExtender{fileFetcherExtender: newFileFetcher(new(DefaultExtender)),
 		callCount: make(map[extensionMethodKey]int64, eMKLast),
 		methods:   make(map[extensionMethodKey]interface{}, 2)}
 	if v != nil {

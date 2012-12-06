@@ -2,6 +2,8 @@ package gocrawl
 
 import (
 	"bytes"
+	"net/url"
+	"strings"
 	"testing"
 )
 
@@ -57,4 +59,30 @@ func TestEnqueueChanShadowed(t *testing.T) {
 	c.Options.LogFlags = LogInfo
 	c.Run()
 	assertIsInLog(*me.b, "extender.EnqueueChan is not of type chan<-*gocrawl.CrawlerCommand, cannot set the enqueue channel\n", t)
+}
+
+func TestEnqueueNewUrl(t *testing.T) {
+	spy := newSpyExtenderFunc(eMKFilter, func(u *url.URL, from *url.URL, isVisited bool, o EnqueueOrigin) (enqueue bool, priority int, hrm HeadRequestMode) {
+		// Accept only non-visited Page1s
+		return !isVisited && strings.HasSuffix(u.Path, "page1.html"), 0, HrmDefault
+	})
+
+	enqueued := false
+	spy.setExtensionMethod(eMKEnqueued, func(u *url.URL, from *url.URL) {
+		// Add hostc's Page1 to crawl
+		if !enqueued {
+			newU, _ := url.Parse("http://hostc/page1.html")
+			spy.EnqueueChan <- &CrawlerCommand{newU, EoCustomStart}
+			enqueued = true
+		}
+	})
+
+	opts := NewOptions(spy)
+	opts.CrawlDelay = DefaultTestCrawlDelay
+	opts.LogFlags = LogAll
+	c := NewCrawlerWithOptions(opts)
+	c.Run("http://hostb/page1.html")
+
+	assertCallCount(spy, eMKFilter, 7, t)
+	assertCallCount(spy, eMKEnqueued, 4, t) // robots.txt * 2, both Page1s
 }
