@@ -105,6 +105,9 @@ type Extender interface {
 // Default working implementation of an extender.
 type DefaultExtender struct {
 	EnqueueChan chan<- *CrawlerCommand
+	// TODO : Use a custom http client, intercept redirections, enqueue the final
+	// destination. Warning: if a HEAD is requested, how to cancel the GET so that
+	// no more time is lost on this URL?
 }
 
 // Return the same seeds as those received (those that were passed
