@@ -86,3 +86,32 @@ func TestEnqueueNewUrl(t *testing.T) {
 	assertCallCount(spy, eMKFilter, 7, t)
 	assertCallCount(spy, eMKEnqueued, 4, t) // robots.txt * 2, both Page1s
 }
+
+func TestEnqueueNewUrlOnError(t *testing.T) {
+	spy := newSpyExtenderFunc(eMKFilter, func(u *url.URL, from *url.URL, isVisited bool, o EnqueueOrigin) (enqueue bool, priority int, hrm HeadRequestMode) {
+		// If is visited, but has an origin of Error, allow
+		if isVisited && o == EoError {
+			return true, 0, HrmDefault
+		}
+		// Accept only non-visited
+		return !isVisited, 0, HrmDefault
+	})
+
+	once := false
+	spy.setExtensionMethod(eMKError, func(err *CrawlError) {
+		if err.Kind == CekFetch && !once {
+			// On error, reenqueue once only
+			once = true
+			spy.EnqueueChan <- &CrawlerCommand{err.URL, EoError}
+		}
+	})
+
+	opts := NewOptions(spy)
+	opts.LogFlags = LogAll
+	opts.CrawlDelay = DefaultTestCrawlDelay
+	c := NewCrawlerWithOptions(opts)
+	c.Run("http://hosta/page6.html")
+
+	assertCallCount(spy, eMKFilter, 2, t)   // First pass and re-enqueued from error
+	assertCallCount(spy, eMKEnqueued, 3, t) // Twice and robots.txt
+}

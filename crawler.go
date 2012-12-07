@@ -33,6 +33,7 @@ const (
 	EoSeed        EnqueueOrigin = iota // Seed URLs have this source
 	EoHarvest                          // URLs harvested from a visit to a page have this source
 	EoRedirect                         // URLs enqueued from a fetch redirection have this source by default
+	EoError                            // URLs enqueued after an error
 	EoCustomStart                      // Custom EnqueueOrigins should start at this value instead of iota
 )
 
@@ -239,6 +240,12 @@ func (this *Crawler) enqueueUrls(harvestedUrls []*url.URL, sourceUrl *url.URL, o
 
 		// Normalize URL
 		purell.NormalizeURL(u, this.Options.URLNormalizationFlags)
+		// Cannot directly enqueue a robots.txt URL, since it is managed as a special case
+		// in the worker.
+		if isRobotsTxtUrl(u) {
+			continue
+		}
+		// Check if it has been visited before
 		_, isVisited = this.visited[u.String()]
 
 		// Filter the URL - TODO : Priority is ignored at the moment
