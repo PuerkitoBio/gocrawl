@@ -141,6 +141,19 @@ func (this *DefaultExtender) ComputeDelay(host string, di *DelayInfo, lastFetch 
 
 // Fetch requests the specified URL using the given user agent string. It uses
 // Go's default http Client instance.
+//
+// TODO : Two options:
+// 1- Do NOT follow any redirections, and enqueue the redirect URL, failing the current call with the 3xx status code.
+// 2- Follow all redirections, enqueue only the last one (where redirection stops). Return the response of the second-to-last request.
+//
+// 1 has the advantage of giving full control of the process, and not making any unnecessary request.
+// 2 has the advantage of enqueing only the initial URL and the final destination of the redirections, so that
+// the Filter() doesn't have to allow each step in between. BUT, the big drawback is that the final URL will be
+// requested twice (once to know that it is in fact the destination of the redirect, and once for the real processing
+// of this URL).
+//
+// What to do? I think 2) has the best "value". Both can easily be done in user-land, should someone absolutely
+// need the behavior.
 func (this *DefaultExtender) Fetch(u *url.URL, userAgent string, headRequest bool) (res *http.Response, err error) {
 	var reqType string
 
