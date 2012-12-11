@@ -209,11 +209,13 @@ func (this *DefaultExtender) Fetch(u *url.URL, userAgent string, headRequest boo
 					// TODO : What to do on URL parse error? Ideally should log, but no access to logfunc here...
 				} else {
 					this.Log(LogTrace, LogTrace, "Redirect to "+ue.URL)
+					// TODO : EnqueueChan may be shadowed, this one may be nil! (as in my test...)
 					this.EnqueueChan <- &CrawlerCommand{u, EoRedirect}
 				}
 			}
 		}
 	}
+	this.Log(LogTrace, LogTrace, "return")
 	return
 }
 

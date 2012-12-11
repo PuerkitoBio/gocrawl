@@ -353,6 +353,7 @@ func (this *Crawler) collectUrls() {
 		case enq := <-this.enqueue:
 			// Received a command to enqueue a URL, proceed
 			// TODO : Receive the source URL? Or validate same host policy based on original host slice?
+			this.logFunc(LogTrace, "Received url %s", enq.URL.String())
 			this.enqueueUrls([]*url.URL{enq.URL}, nil, enq.Origin)
 
 		default:
