@@ -233,7 +233,7 @@ func TestFilter(t *testing.T) {
 func TestNoHead(t *testing.T) {
 	var calledWithHead bool
 
-	ff := newFileFetcher(new(DefaultExtender))
+	ff := newFileFetcher()
 
 	spy := newSpyExtenderFunc(eMKFetch, func(u *url.URL, userAgent string, headRequest bool) (res *http.Response, err error) {
 		if headRequest {
@@ -261,7 +261,7 @@ func TestAllHead(t *testing.T) {
 	var calledWithHead int
 	var calledWithoutHead int
 
-	ff := newFileFetcher(new(DefaultExtender))
+	ff := newFileFetcher()
 
 	spy := newSpyExtenderFunc(eMKFetch, func(u *url.URL, userAgent string, headRequest bool) (res *http.Response, err error) {
 		if headRequest {
@@ -292,7 +292,7 @@ func TestAllHeadWithFetchError(t *testing.T) {
 	var calledWithHead int
 	var calledWithoutHead int
 
-	ff := newFileFetcher(new(DefaultExtender))
+	ff := newFileFetcher()
 
 	spy := newSpyExtenderFunc(eMKFetch, func(u *url.URL, userAgent string, headRequest bool) (res *http.Response, err error) {
 		if headRequest {
@@ -327,7 +327,7 @@ func TestRequestGetFalse(t *testing.T) {
 	var calledWithHead int
 	var calledWithoutHead int
 
-	ff := newFileFetcher(new(DefaultExtender))
+	ff := newFileFetcher()
 
 	spy := newSpyExtenderFunc(eMKFetch, func(u *url.URL, userAgent string, headRequest bool) (res *http.Response, err error) {
 		if headRequest {
@@ -366,7 +366,7 @@ func TestHeadTrueFilterOverride(t *testing.T) {
 	var calledWithHead int
 	var calledWithoutHead int
 
-	ff := newFileFetcher(new(DefaultExtender))
+	ff := newFileFetcher()
 	spy := newSpyExtenderFunc(eMKFetch, func(u *url.URL, userAgent string, headRequest bool) (res *http.Response, err error) {
 		if headRequest {
 			calledWithHead += 1
@@ -410,7 +410,7 @@ func TestHeadFalseFilterOverride(t *testing.T) {
 	var calledWithHead int
 	var calledWithoutHead int
 
-	ff := newFileFetcher(new(DefaultExtender))
+	ff := newFileFetcher()
 	spy := newSpyExtenderFunc(eMKFetch, func(u *url.URL, userAgent string, headRequest bool) (res *http.Response, err error) {
 		if headRequest {
 			calledWithHead += 1
@@ -490,7 +490,7 @@ func TestCrawlDelay(t *testing.T) {
 	var since []time.Duration
 	cnt := 0
 
-	ff := newFileFetcher(new(DefaultExtender))
+	ff := newFileFetcher()
 	spy := newSpyExtenderFunc(eMKFetch, func(u *url.URL, userAgent string, headRequest bool) (res *http.Response, err error) {
 		since = append(since, time.Now().Sub(last))
 		last = time.Now()
