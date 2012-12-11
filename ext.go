@@ -1,6 +1,7 @@
 package gocrawl
 
 import (
+	"errors"
 	"github.com/PuerkitoBio/goquery"
 	"log"
 	"net/http"
@@ -108,12 +109,21 @@ type redirectError struct {
 	msg string
 }
 
+// Implement the error interface
 func (this *redirectError) Error() string {
 	return this.msg
 }
 
 // The HTTP client used by all fetch requests (this is thread-safe)
 var httpClient = &http.Client{CheckRedirect: func(req *http.Request, via []*http.Request) error {
+	if isRobotsTxtUrl(req.URL) {
+		// Allow up to 10 redirects, like the default http client
+		if len(via) >= 10 {
+			return errors.New("stopped after 10 redirects")
+		} else {
+			return nil
+		}
+	}
 	// Do NOT follow redirections, the default Fetch() implementation will enqueue
 	// the new (redirect-to) URL. Returning an error will make httpClient.Do() return
 	// a url.Error, with the URL field containing the new URL.
@@ -198,6 +208,7 @@ func (this *DefaultExtender) Fetch(u *url.URL, userAgent string, headRequest boo
 				if u, e := url.Parse(ue.URL); e != nil {
 					// TODO : What to do on URL parse error? Ideally should log, but no access to logfunc here...
 				} else {
+					this.Log(LogTrace, LogTrace, "Redirect to "+ue.URL)
 					this.EnqueueChan <- &CrawlerCommand{u, EoRedirect}
 				}
 			}

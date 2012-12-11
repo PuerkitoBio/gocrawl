@@ -107,3 +107,5 @@ func TestFetchedRobot(t *testing.T) {
 		t.Error("Empty body in fetched robots")
 	}
 }
+
+// TODO : Add test with web fetcher for a site with no robots.txt (404)
