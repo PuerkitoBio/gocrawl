@@ -145,11 +145,11 @@ func newSpyExtenderConfigured(visitDelay time.Duration, returnUrls []*url.URL, d
 	return newSpyExtender(v, f)
 }
 
-func (this *spyExtender) Log(logFlags LogFlags, msgLevel LogFlags, msg string) {
+/*func (this *spyExtender) Log(logFlags LogFlags, msgLevel LogFlags, msg string) {
 	if logFlags&msgLevel == msgLevel {
 		this.b.WriteString(msg + "\n")
 	}
-}
+}*/
 
 func (this *spyExtender) Visit(res *http.Response, doc *goquery.Document) ([]*url.URL, bool) {
 	this.incCallCount(eMKVisit, 1)
