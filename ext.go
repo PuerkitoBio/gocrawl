@@ -102,12 +102,27 @@ type Extender interface {
 	Disallowed(u *url.URL)
 }
 
+// The private error type returned when a redirection is requested, so that the
+// default Fetch() implementation knows that this is not an actual Fetch error.
+type redirectError struct {
+	msg string
+}
+
+func (this *redirectError) Error() string {
+	return this.msg
+}
+
+// The HTTP client used by all fetch requests (this is thread-safe)
+var httpClient = &http.Client{CheckRedirect: func(req *http.Request, via []*http.Request) error {
+	// Do NOT follow redirections, the default Fetch() implementation will enqueue
+	// the new (redirect-to) URL. Returning an error will make httpClient.Do() return
+	// a url.Error, with the URL field containing the new URL.
+	return &redirectError{"redirection not followed"}
+}}
+
 // Default working implementation of an extender.
 type DefaultExtender struct {
 	EnqueueChan chan<- *CrawlerCommand
-	// TODO : Use a custom http client, intercept redirections, enqueue the final
-	// destination. Warning: if a HEAD is requested, how to cancel the GET so that
-	// no more time is lost on this URL?
 }
 
 // Return the same seeds as those received (those that were passed
@@ -140,20 +155,28 @@ func (this *DefaultExtender) ComputeDelay(host string, di *DelayInfo, lastFetch 
 }
 
 // Fetch requests the specified URL using the given user agent string. It uses
-// Go's default http Client instance.
+// a custom http Client instance that doesn't follow redirections. Instead, the
+// redirected-to URL is enqueued so that it goes through the same Filter() and
+// Fetch() process as any other URL.
 //
-// TODO : Two options:
-// 1- Do NOT follow any redirections, and enqueue the redirect URL, failing the current call with the 3xx status code.
-// 2- Follow all redirections, enqueue only the last one (where redirection stops). Return the response of the second-to-last request.
+// Two options were considered for the default Fetch() implementation :
+// 1- Not following any redirections, and enqueuing the redirect-to URL,
+//    failing the current call with the 3xx status code.
+// 2- Following all redirections, enqueuing only the last one (where redirection
+//    stops). Returning the response of the next-to-last request.
 //
-// 1 has the advantage of giving full control of the process, and not making any unnecessary request.
-// 2 has the advantage of enqueing only the initial URL and the final destination of the redirections, so that
-// the Filter() doesn't have to allow each step in between. BUT, the big drawback is that the final URL will be
-// requested twice (once to know that it is in fact the destination of the redirect, and once for the real processing
-// of this URL).
+// Ultimately, 1) was implemented, as it is the most generic solution that makes
+// sense as default for the library. It involves no "magic" and gives full control
+// as to what can happen, with the disadvantage of having the Filter() being aware
+// of all possible intermediary URLs before reaching the final destination of
+// a redirection (i.e. if A redirects to B that redirects to C, Filter has to
+// allow A, B, and C to be Fetched, while solution 2 would only have required
+// Filter to allow A and C).
 //
-// What to do? I think 2) has the best "value". Both can easily be done in user-land, should someone absolutely
-// need the behavior.
+// Solution 2) also has the disadvantage of fetching twice the final URL (once 
+// while processing the original URL, so that it knows that there is no more
+// redirection HTTP code, and another time when the actual destination URL is
+// fetched to be visited).
 func (this *DefaultExtender) Fetch(u *url.URL, userAgent string, headRequest bool) (res *http.Response, err error) {
 	var reqType string
 
@@ -168,7 +191,19 @@ func (this *DefaultExtender) Fetch(u *url.URL, userAgent string, headRequest boo
 		return nil, e
 	}
 	req.Header["User-Agent"] = []string{userAgent}
-	return http.DefaultClient.Do(req)
+	if res, err = httpClient.Do(req); err != nil {
+		if ue, ok := err.(*url.Error); ok {
+			if _, ok := ue.Err.(*redirectError); ok {
+				// Enqueue the redirect-to URL
+				if u, e := url.Parse(ue.URL); e != nil {
+					// TODO : What to do on URL parse error? Ideally should log, but no access to logfunc here...
+				} else {
+					this.EnqueueChan <- &CrawlerCommand{u, EoRedirect}
+				}
+			}
+		}
+	}
+	return
 }
 
 // Ask the worker to actually request the URL's body (issue a GET).
