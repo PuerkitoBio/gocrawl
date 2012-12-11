@@ -360,6 +360,7 @@ func TestRequestGetFalse(t *testing.T) {
 	assertCallCount(spy, eMKFetch, 6, t) // Once for robots.txt and page2, twice each for page1 and page3
 	assertCallCount(spy, eMKRequestGet, 3, t)
 	assertCallCount(spy, eMKEnqueued, 4, t)
+	assertCallCount(spy, eMKVisit, 2, t)
 }
 
 func TestHeadTrueFilterOverride(t *testing.T) {

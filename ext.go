@@ -30,6 +30,7 @@ const (
 	CekParseSeed
 	CekParseNormalizedSeed
 	CekProcessLinks
+	CekParseRedirectUrl
 )
 
 // Flag indicating the head request override mode
@@ -103,31 +104,34 @@ type Extender interface {
 	Disallowed(u *url.URL)
 }
 
-// The private error type returned when a redirection is requested, so that the
-// default Fetch() implementation knows that this is not an actual Fetch error.
-type redirectError struct {
+// The error type returned when a redirection is requested, so that the
+// worker knows that this is not an actual Fetch error, but a request to
+// enqueue the redirect-to URL.
+type EnqueueRedirectError struct {
 	msg string
 }
 
 // Implement the error interface
-func (this *redirectError) Error() string {
+func (this *EnqueueRedirectError) Error() string {
 	return this.msg
 }
 
 // The HTTP client used by all fetch requests (this is thread-safe)
 var httpClient = &http.Client{CheckRedirect: func(req *http.Request, via []*http.Request) error {
+	// For robots.txt URLs, allow up to 10 redirects, like the default http client.
+	// Rationale: the site owner explicitly tells us that this specific robots.txt
+	// should be used for this domain.
 	if isRobotsTxtUrl(req.URL) {
-		// Allow up to 10 redirects, like the default http client
 		if len(via) >= 10 {
 			return errors.New("stopped after 10 redirects")
-		} else {
-			return nil
 		}
+		return nil
 	}
-	// Do NOT follow redirections, the default Fetch() implementation will enqueue
-	// the new (redirect-to) URL. Returning an error will make httpClient.Do() return
-	// a url.Error, with the URL field containing the new URL.
-	return &redirectError{"redirection not followed"}
+
+	// For all other URLs, do NOT follow redirections, the default Fetch() implementation
+	// will ask the worker to enqueue the new (redirect-to) URL. Returning an error
+	// will make httpClient.Do() return a url.Error, with the URL field containing the new URL.
+	return &EnqueueRedirectError{"redirection not followed"}
 }}
 
 // Default working implementation of an extender.
@@ -187,7 +191,7 @@ func (this *DefaultExtender) ComputeDelay(host string, di *DelayInfo, lastFetch 
 // while processing the original URL, so that it knows that there is no more
 // redirection HTTP code, and another time when the actual destination URL is
 // fetched to be visited).
-func (this *DefaultExtender) Fetch(u *url.URL, userAgent string, headRequest bool) (res *http.Response, err error) {
+func (this *DefaultExtender) Fetch(u *url.URL, userAgent string, headRequest bool) (*http.Response, error) {
 	var reqType string
 
 	// Prepare the request with the right user agent
@@ -201,27 +205,13 @@ func (this *DefaultExtender) Fetch(u *url.URL, userAgent string, headRequest boo
 		return nil, e
 	}
 	req.Header["User-Agent"] = []string{userAgent}
-	if res, err = httpClient.Do(req); err != nil {
-		if ue, ok := err.(*url.Error); ok {
-			if _, ok := ue.Err.(*redirectError); ok {
-				// Enqueue the redirect-to URL
-				if u, e := url.Parse(ue.URL); e != nil {
-					// TODO : What to do on URL parse error? Ideally should log, but no access to logfunc here...
-				} else {
-					this.Log(LogTrace, LogTrace, "Redirect to "+ue.URL)
-					// TODO : EnqueueChan may be shadowed, this one may be nil! (as in my test...)
-					this.EnqueueChan <- &CrawlerCommand{u, EoRedirect}
-				}
-			}
-		}
-	}
-	this.Log(LogTrace, LogTrace, "return")
-	return
+	return httpClient.Do(req)
 }
 
-// Ask the worker to actually request the URL's body (issue a GET).
+// Ask the worker to actually request the URL's body (issue a GET), unless
+// the status code is not 2xx.
 func (this *DefaultExtender) RequestGet(headRes *http.Response) bool {
-	return true
+	return headRes.StatusCode >= 200 && headRes.StatusCode < 300
 }
 
 // Ask the worker to actually request (fetch) the Robots.txt document.

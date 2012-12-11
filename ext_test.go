@@ -116,10 +116,8 @@ func TestEnqueueNewUrlOnError(t *testing.T) {
 	assertCallCount(spy, eMKEnqueued, 3, t) // Twice and robots.txt
 }
 
-// TODO : Has to use "real" extender, not file-based. But then, no spy... Refactor
-// spy so that it can be both file- and web-based?
 func TestRedirectFilterOut(t *testing.T) {
-	spy := newSpy(new(DefaultExtender), false)
+	spy := newSpy(new(DefaultExtender), true)
 	spy.setExtensionMethod(eMKFilter, func(u *url.URL, from *url.URL, isVisited bool, o EnqueueOrigin) (enqueue bool, priority int, hrm HeadRequestMode) {
 		// Accept only src.ca
 		return !isVisited && u.Host == "src.ca", 0, HrmDefault

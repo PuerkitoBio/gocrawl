@@ -212,6 +212,7 @@ func (this *Crawler) launchWorker(u *url.URL) *worker {
 		stop,
 		this.wg,
 		nil,
+		this.enqueue,
 		this.Options.CrawlDelay,
 		this.Options.WorkerIdleTTL,
 		nil,

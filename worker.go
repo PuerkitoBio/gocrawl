@@ -25,11 +25,12 @@ type worker struct {
 	robotUserAgent string
 
 	// Communication channels and sync
-	push chan<- *workerResponse
-	pop  popChannel
-	stop chan bool
-	wg   *sync.WaitGroup
-	wait <-chan time.Time
+	push    chan<- *workerResponse
+	pop     popChannel
+	stop    chan bool
+	wg      *sync.WaitGroup
+	wait    <-chan time.Time
+	enqueue chan<- *CrawlerCommand
 
 	// Config
 	crawlDelay  time.Duration
@@ -208,6 +209,7 @@ func (this *worker) setCrawlDelay() {
 // Request the specified URL and return the response.
 func (this *worker) fetchUrl(u *url.URL, agent string, headRequest bool) (res *http.Response, ok bool) {
 	var e error
+	var silent bool
 
 	for {
 		// Wait for crawl delay, if one is pending.
@@ -225,12 +227,36 @@ func (this *worker) fetchUrl(u *url.URL, agent string, headRequest bool) (res *h
 
 		// Request the URL
 		if res, e = this.extender.Fetch(u, agent, headRequest); e != nil {
+			// Check if this is an EnqueueRedirectError, in which case we will enqueue
+			// the redirect-to URL.
+			if ue, y := e.(*url.Error); y {
+				// We have a *url.Error, check if it was returned because of an EnqueueRedirectError
+				if _, y = ue.Err.(*EnqueueRedirectError); y {
+					// Do not notify this error outside of this if block, this is not a
+					// "real" error. We either enqueue the new URL, or fail to parse it,
+					// and then stop processing the current URL.
+					silent = true
+					if u, e := url.Parse(ue.URL); e != nil {
+						// Notify error
+						this.extender.Error(newCrawlError(e, CekParseRedirectUrl, nil))
+						this.logFunc(LogError, "ERROR parsing redirect URL %s: %s", ue.URL, e.Error())
+					} else {
+						// Enqueue the redirect-to URL
+						this.logFunc(LogTrace, "redirect to %s", u.String())
+						// TODO : Get the enqueue channel from the crawler
+						this.enqueue <- &CrawlerCommand{u, EoRedirect}
+					}
+				}
+			}
+
 			// No fetch, so set to nil
 			this.lastFetch = nil
 
-			// Notify error
-			this.extender.Error(newCrawlError(e, CekFetch, u))
-			this.logFunc(LogError, "ERROR fetching %s: %s", u.String(), e.Error())
+			if !silent {
+				// Notify error
+				this.extender.Error(newCrawlError(e, CekFetch, u))
+				this.logFunc(LogError, "ERROR fetching %s: %s", u.String(), e.Error())
+			}
 
 			// Return from this URL crawl
 			this.sendResponse(u, false, nil, false)
