@@ -113,7 +113,7 @@ The Crawler type controls the whole execution. It spawns worker goroutines and m
 *    **NewCrawler(Extender)** : Creates a crawler with the specified `Extender` instance.
 *    **NewCrawlerWithOptions(Options)** : Creates a crawler with a pre-initialized `*Options` instance.
 
-The one and only public function is `Run(seeds ...string)` which take a variadic string argument, the base URLs used to start crawling. It ends when there are no more URLs waiting to be visited, or when the `Options.MaxVisit` number is reached.
+The one and only public function is `Run(seeds ...string) EndReason` which take a variadic string argument, the base URLs used to start crawling. It ends when there are no more URLs waiting to be visited, or when the `Options.MaxVisit` number is reached.
 
 ### Options
 
@@ -122,8 +122,6 @@ The Options type is detailed in the next section, and it offers a single constru
 ### Hooks and customizations
 <a name="hc" />
 
-*TODO: Update this section*
-
 The `Options` type provides the hooks and customizations offered by gocrawl. All but `Extender` are optional and have working defaults.
 
 *    **UserAgent** : The user-agent string used to fetch the pages. Defaults to the Firefox 15 on Windows user-agent string.
@@ -131,6 +129,10 @@ The `Options` type provides the hooks and customizations offered by gocrawl. All
 *    **RobotUserAgent** : The robot's user-agent string used to fetch and query robots.txt for permission to crawl an URL. Defaults to `Googlebot (gocrawl vM.m)` where `M.m` is the major and minor version of gocrawl. See the [robots exclusion protocol][robprot] ([full specification as interpreted by Google here][robspec]) for details about the rule-matching based on the robot's user agent. It is good practice to include contact information in the user agent should the site owner need to contact you.
 
 *    **MaxVisits** : The maximum number of pages *visited* before stopping the crawl. Probably more useful for development purposes. Note that the Crawler will send its stop signal once this number of visits is reached, but workers may be in the process of visiting other pages, so when the crawling stops, the number of pages visited will be *at least* MaxVisits, possibly more (worst case is `MaxVisits + number of active workers`). Defaults to zero, no maximum.
+
+*    **EnqueueChanBuffer** : The size of the buffer for the Enqueue channel (the channel that allows the extender to arbitrarily enqueue new URLs in the crawler). Defaults to 100.
+
+*    **HostBufferFactor** : The factor (multiplier) for the size of the workers map and the communication channel when SameHostOnly is set to `false`. When SameHostOnly is `true`, the Crawler knows exactly the required size (the number of different hosts based on the seed URLs), but when it is `false`, the size may grow exponentially. By default, a factor of 10 is used (size is set to 10 times the number of different hosts based on the seed URLs).
 
 *    **CrawlDelay** : The time to wait between each request to the same host. The delay starts as soon as the response is received from the host. This is a `time.Duration` type, so it can be specified with `5 * time.Second` for example (which is the default value, 5 seconds). **If a crawl delay is specified in the robots.txt file, in the group matching the robot's user-agent, by default this delay is used instead**. Crawl delay can be customized further by implementing the `ComputeDelay` extender function.
 
@@ -144,9 +146,11 @@ The `Options` type provides the hooks and customizations offered by gocrawl. All
 
 *    **LogFlags** : The level of verbosity for logging. Defaults to errors only (`LogError`). Can be a set of flags (i.e. `LogError | LogTrace`).
 
-*    **Extender** : The instance implementing the `Extender` interface. This implements the various callbacks offered by gocrawl. Must be specified when creating a `Crawler` (or when creating an `Options` to pass to `NewCrawlerWithOptions` constructor). A default extender is provided as a valid default implementation, `DefaultExtender`. It can be used to implement a custom extender when not all methods need customization (see the example above).
+*    **Extender** : The instance implementing the `Extender` interface. This implements the various callbacks offered by gocrawl. Must be specified when creating a `Crawler` (or when creating an `Options` to pass to `NewCrawlerWithOptions` constructor). A default extender is provided as a valid default implementation, `DefaultExtender`. It can be used by [embedding it as an anonymous field][gotalk] to implement a custom extender when not all methods need customization (see the example above).
 
 This last option field, `Extender`, is crucial in using gocrawl, so here are the details for each callback function required by the `Extender` interface:
+
+*TODO: Update this section*
 
 *    **Start** : `Start(seeds []string) []string`. Called when `Run` is called on the crawler, with the seeds passed to `Run` as argument. It returns a slice of strings that will be used as actual seeds, so that this callback can control which seeds are passed to the crawler.
 
@@ -184,8 +188,8 @@ This last option field, `Extender`, is crucial in using gocrawl, so here are the
 
 ## Thanks
 
-Richard Penman
-Dmitry Bondarenko
+* Richard Penman
+* Dmitry Bondarenko
 
 ## License
 
@@ -202,3 +206,4 @@ The [BSD 3-Clause license][bsd].
 [godoc]: http://go.pkgdoc.org/github.com/PuerkitoBio/gocrawl
 [er]: http://go.pkgdoc.org/github.com/PuerkitoBio/gocrawl#EndReason
 [ce]: http://go.pkgdoc.org/github.com/PuerkitoBio/gocrawl#CrawlError
+[gotalk]: http://talks.golang.org/2012/chat.slide#32
