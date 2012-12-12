@@ -243,7 +243,6 @@ func (this *worker) fetchUrl(u *url.URL, agent string, headRequest bool) (res *h
 					} else {
 						// Enqueue the redirect-to URL
 						this.logFunc(LogTrace, "redirect to %s", u.String())
-						// TODO : Get the enqueue channel from the crawler
 						this.enqueue <- &CrawlerCommand{u, EoRedirect}
 					}
 				}

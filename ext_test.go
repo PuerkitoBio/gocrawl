@@ -81,6 +81,7 @@ func TestEnqueueNewUrl(t *testing.T) {
 	opts := NewOptions(spy)
 	opts.CrawlDelay = DefaultTestCrawlDelay
 	opts.LogFlags = LogAll
+	opts.SameHostOnly = false
 	c := NewCrawlerWithOptions(opts)
 	c.Run("http://hostb/page1.html")
 
@@ -146,6 +147,7 @@ func TestRedirectFollow(t *testing.T) {
 	opts.LogFlags = LogInfo | LogError
 	opts.URLNormalizationFlags = purell.FlagsAllGreedy ^ purell.FlagRemoveWWW // Do not remove www, as it redirects to www!
 	opts.CrawlDelay = DefaultTestCrawlDelay
+	opts.SameHostOnly = false
 	c := NewCrawlerWithOptions(opts)
 	c.Run("http://src.ca")
 
@@ -165,6 +167,7 @@ func TestRedirectFollowHeadFirst(t *testing.T) {
 	opts.HeadBeforeGet = true
 	opts.URLNormalizationFlags = purell.FlagsAllGreedy ^ purell.FlagRemoveWWW // Do not remove www, as it redirects to www!
 	opts.CrawlDelay = DefaultTestCrawlDelay
+	opts.SameHostOnly = false
 	c := NewCrawlerWithOptions(opts)
 	c.Run("http://src.ca")
 

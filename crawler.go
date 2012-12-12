@@ -60,6 +60,7 @@ type Crawler struct {
 	pushPopRefCount int
 	visits          int
 	workers         map[string]*worker
+	hosts           []string
 }
 
 // Crawler constructor with a pre-initialized Options object.
@@ -94,8 +95,9 @@ func (this *Crawler) init(seeds []string) []*url.URL {
 	// Helper log function, takes care of filtering based on level
 	this.logFunc = getLogFunc(this.Options.Extender, this.Options.LogFlags, -1)
 
-	// Parse the seeds and get the host count
-	parsedSeeds, hostCount := this.parseSeeds(seeds)
+	// Parse the seeds and initialize the internal hosts slice
+	parsedSeeds := this.parseSeeds(seeds)
+	hostCount := len(this.hosts)
 	l := len(parsedSeeds)
 	this.logFunc(LogTrace, "init() - seeds length: %d", l)
 	this.logFunc(LogTrace, "init() - host count: %d", hostCount)
@@ -168,11 +170,10 @@ func (this *Crawler) setExtenderEnqueueChan() {
 	ec.Set(src)
 }
 
-// Parse the seeds URL strings to URL objects, and return the URL objects slice,
-// along with the count of distinct hosts.
-func (this *Crawler) parseSeeds(seeds []string) ([]*url.URL, int) {
+// Parse the seeds URL strings to URL objects, and return the URL objects slice
+func (this *Crawler) parseSeeds(seeds []string) []*url.URL {
 	// Translate seeds strings to URLs, normalized right away (to allow host count)
-	hosts := make([]string, 0, len(seeds))
+	this.hosts = make([]string, 0, len(seeds))
 	parsedSeeds := make([]*url.URL, 0, len(seeds))
 
 	for _, s := range seeds {
@@ -185,14 +186,14 @@ func (this *Crawler) parseSeeds(seeds []string) ([]*url.URL, int) {
 				this.logFunc(LogError, "ERROR parsing normalized seed %s", u)
 			} else {
 				parsedSeeds = append(parsedSeeds, parsed)
-				if indexInStrings(hosts, parsed.Host) == -1 {
-					hosts = append(hosts, parsed.Host)
+				if indexInStrings(this.hosts, parsed.Host) == -1 {
+					this.hosts = append(this.hosts, parsed.Host)
 				}
 			}
 		}
 	}
 
-	return parsedSeeds, len(hosts)
+	return parsedSeeds
 }
 
 // Launch a new worker goroutine for a given host.
@@ -232,6 +233,18 @@ func (this *Crawler) launchWorker(u *url.URL) *worker {
 	return w
 }
 
+// Check if the specified URL is from the same host as its source URL, or if
+// nil, from the same host as one of the seed URLs.
+func (this *Crawler) isSameHost(u *url.URL, sourceUrl *url.URL) bool {
+	// If there is a source URL, then just check if the new URL is from the same host
+	if sourceUrl != nil {
+		return u.Host == sourceUrl.Host
+	}
+
+	// Otherwise, check if the URL is from one of the seed hosts
+	return indexInStrings(this.hosts, u.Host) != -1
+}
+
 // Enqueue the URLs returned from the worker, as long as it complies with the
 // selection policies.
 func (this *Crawler) enqueueUrls(harvestedUrls []*url.URL, sourceUrl *url.URL, origin EnqueueOrigin) (cnt int) {
@@ -242,7 +255,7 @@ func (this *Crawler) enqueueUrls(harvestedUrls []*url.URL, sourceUrl *url.URL, o
 		// Normalize URL
 		purell.NormalizeURL(u, this.Options.URLNormalizationFlags)
 		// Cannot directly enqueue a robots.txt URL, since it is managed as a special case
-		// in the worker.
+		// in the worker (doesn't return a response to crawler).
 		if isRobotsTxtUrl(u) {
 			continue
 		}
@@ -265,7 +278,7 @@ func (this *Crawler) enqueueUrls(harvestedUrls []*url.URL, sourceUrl *url.URL, o
 		} else if !strings.HasPrefix(u.Scheme, "http") {
 			this.logFunc(LogIgnored, "ignore on scheme policy: %s", u.String())
 
-		} else if sourceUrl != nil && u.Host != sourceUrl.Host && this.Options.SameHostOnly {
+		} else if this.Options.SameHostOnly && !this.isSameHost(u, sourceUrl) {
 			// Only allow URLs coming from the same host
 			this.logFunc(LogIgnored, "ignore on same host policy: %s", u.String())
 
@@ -353,7 +366,6 @@ func (this *Crawler) collectUrls() {
 
 		case enq := <-this.enqueue:
 			// Received a command to enqueue a URL, proceed
-			// TODO : Receive the source URL? Or validate same host policy based on original host slice?
 			this.logFunc(LogTrace, "Received url %s", enq.URL.String())
 			this.enqueueUrls([]*url.URL{enq.URL}, nil, enq.Origin)
 
