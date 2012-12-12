@@ -108,4 +108,18 @@ func TestFetchedRobot(t *testing.T) {
 	}
 }
 
-// TODO : Add test with web fetcher for a site with no robots.txt (404)
+func TestNoRobot(t *testing.T) {
+	spy := newSpy(new(DefaultExtender), true)
+	spy.setExtensionMethod(eMKFilter, func(u *url.URL, from *url.URL, isVisited bool, o EnqueueOrigin) (enqueue bool, priority int, hrm HeadRequestMode) {
+		return !isVisited && from == nil, 0, HrmDefault
+	})
+
+	opts := NewOptions(spy)
+	opts.CrawlDelay = DefaultTestCrawlDelay
+	opts.LogFlags = LogAll
+	c := NewCrawlerWithOptions(opts)
+	c.Run("http://expressjs.com/") // TODO : Check if it really has no robots.txt!
+
+	assertCallCount(spy, eMKFetch, 2, t) // robots + root
+	assertCallCount(spy, eMKVisit, 1, t) // root
+}
