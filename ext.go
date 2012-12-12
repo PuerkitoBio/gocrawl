@@ -86,22 +86,22 @@ type FetchInfo struct {
 
 // Extension methods required to provide an extender instance.
 type Extender interface {
-	Start(seeds []string) []string
-	End(reason EndReason)
-	Error(err *CrawlError)
-	Log(logFlags LogFlags, msgLevel LogFlags, msg string)
+	Start([]string) []string
+	End(EndReason)
+	Error(*CrawlError)
+	Log(LogFlags, LogFlags, string)
 
-	ComputeDelay(host string, di *DelayInfo, lastFetch *FetchInfo) time.Duration
-	Fetch(u *url.URL, userAgent string, headRequest bool) (res *http.Response, err error)
-	RequestGet(headRes *http.Response) bool
-	RequestRobots(u *url.URL, robotAgent string) (request bool, data []byte)
-	FetchedRobots(res *http.Response)
+	ComputeDelay(string, *DelayInfo, *FetchInfo) time.Duration
+	Fetch(*url.URL, string, bool) (*http.Response, error)
+	RequestGet(*http.Response) bool
+	RequestRobots(*url.URL, string) (bool, []byte)
+	FetchedRobots(*http.Response)
 
-	Filter(u *url.URL, from *url.URL, isVisited bool, origin EnqueueOrigin) (enqueue bool, priority int, headRequest HeadRequestMode)
-	Enqueued(u *url.URL, from *url.URL)
-	Visit(*http.Response, *goquery.Document) (harvested []*url.URL, findLinks bool)
-	Visited(u *url.URL, harvested []*url.URL)
-	Disallowed(u *url.URL)
+	Filter(*url.URL, *url.URL, bool, EnqueueOrigin) (bool, int, HeadRequestMode)
+	Enqueued(*url.URL, *url.URL)
+	Visit(*http.Response, *goquery.Document) ([]*url.URL, bool)
+	Visited(*url.URL, []*url.URL)
+	Disallowed(*url.URL)
 }
 
 // The error type returned when a redirection is requested, so that the

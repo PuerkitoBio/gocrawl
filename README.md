@@ -148,13 +148,13 @@ The `Options` type provides the hooks and customizations offered by gocrawl. All
 
 *    **Extender** : The instance implementing the `Extender` interface. This implements the various callbacks offered by gocrawl. Must be specified when creating a `Crawler` (or when creating an `Options` to pass to `NewCrawlerWithOptions` constructor). A default extender is provided as a valid default implementation, `DefaultExtender`. It can be used by [embedding it as an anonymous field][gotalk] to implement a custom extender when not all methods need customization (see the example above).
 
-This last option field, `Extender`, is crucial in using gocrawl, so here are the details for each callback function required by the `Extender` interface:
+### The Extender interface
 
-*TODO: Update this section*
+This last option field, `Extender`, is crucial in using gocrawl, so here are the details for each callback function required by the `Extender` interface.
 
 *    **Start** : `Start(seeds []string) []string`. Called when `Run` is called on the crawler, with the seeds passed to `Run` as argument. It returns a slice of strings that will be used as actual seeds, so that this callback can control which seeds are passed to the crawler.
 
-*    **End** : `End(reason EndReason)`. Called when the crawling ends, with an [`EndReason`][er] flag as argument.
+*    **End** : `End(reason EndReason)`. Called when the crawling ends, with an [`EndReason`][er] flag as argument. This same `EndReason` flag is also returned from the `Crawler.Run()` function.
 
 *    **Error** : `Error(err *CrawlError)`. Called when an error occurs. Errors do **not** stop the crawling execution. A [`CrawlError`][ce] instance is passed as argument. This specialized error implementation includes - among other interesting fields - a `Kind` field that indicates the step where the error occurred.
 
@@ -162,9 +162,11 @@ This last option field, `Extender`, is crucial in using gocrawl, so here are the
 
 *    **ComputeDelay** : `ComputeDelay(host string, di *DelayInfo, lastFetch *FetchInfo) time.Duration`. Called by a worker before requesting a URL. Arguments are the host's name, the crawl delay information (delays from the Options struct, from the robots.txt, and the last used delay), and the last fetch information, so that it is possible to adapt to the current responsiveness of the host. It returns the delay to use. 
 
-*    **Fetch** : `Fetch(u *url.URL, userAgent string, headRequest bool) (res *http.Response, err error)`. The `DefaultExtender.Fetch` implementation uses the default `http.Client` to fetch the pages. It will automatically follow redirects up to 10 times (see the [net/http doc for Client struct][netclient]). If `headRequest` is `true`, a HEAD request is made instead of a GET.
+*    **Fetch** : `Fetch(u *url.URL, userAgent string, headRequest bool) (*http.Response, error)`. Called by a worker to request the URL. The `DefaultExtender.Fetch()` implementation uses a custom `http.Client` to fetch the pages *without* following redirections, instead returning an error so that the worker can enqueue the redirect-to URL. This enforces the whitelisting by the `Filter()` of every URL fetched by the crawling process. If `headRequest` is `true`, a HEAD request is made instead of a GET.
 
-*    **RequestGet** : `RequestGet(headRes *http.Response) bool`. Indicates if the crawler should proceed with a GET request based on the HEAD request's response. This method is only called if a HEAD request was requested (either via the global `HeadBeforeGet` option, or via the `Filter()` return value). The default implementation always returns `true`.
+    Internally, it sets http.Client's `CheckRedirect()` function field, and this `CheckRedirect` implementation follows redirections for robots.txt URLs only (since a redirect on robots.txt still means that the site owner wants us to use these rules for this host). It is possible to provide a custom `Fetch()` implementation based on the same logic. Any `CheckRedirect` implementation that returns a `*gocrawl.EnqueueRedirectError` error will behave this way - that is, the worker will detect this error and will enqueue the redirect-to URL. See the source files ext.go and worker.go for details.
+
+*    **RequestGet** : `RequestGet(headRes *http.Response) bool`. Indicates if the crawler should proceed with a GET request based on the HEAD request's response. This method is only called if a HEAD was requested (either via the global `HeadBeforeGet` option, or via the `Filter()` return value). The default implementation returns `true` if the HEAD response status code was 2xx.
 
 *    **RequestRobots** : `RequestRobots(u *url.URL, robotAgent string) (request bool, data []byte)`. Asks whether the robots.txt URL should be fetched. If `false` is returned as first value, the `data` value is considered to be the robots.txt cached content, and is used as such. The `DefaultExtender.RequestRobots` implementation returns `true, nil`.
 
@@ -198,7 +200,6 @@ The [BSD 3-Clause license][bsd].
 [bsd]: http://opensource.org/licenses/BSD-3-Clause
 [goquery]: https://github.com/PuerkitoBio/goquery
 [robots]: https://github.com/temoto/robotstxt.go
-[netclient]: http://golang.org/pkg/net/http/#Client
 [purell]: https://github.com/PuerkitoBio/purell
 [exp]: http://code.google.com/p/go-wiki/wiki/InstallingExp
 [robprot]: http://www.robotstxt.org/robotstxt.html

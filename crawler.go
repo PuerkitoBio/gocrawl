@@ -366,7 +366,7 @@ func (this *Crawler) collectUrls() {
 
 		case enq := <-this.enqueue:
 			// Received a command to enqueue a URL, proceed
-			this.logFunc(LogTrace, "Received url %s", enq.URL.String())
+			this.logFunc(LogTrace, "receive url %s", enq.URL.String())
 			this.enqueueUrls([]*url.URL{enq.URL}, nil, enq.Origin)
 
 		default:
