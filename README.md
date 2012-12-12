@@ -27,7 +27,7 @@ Once this is done, gocrawl may be installed as usual:
 
 ## Changelog
 
-*    **v0.2.0** : *In development* **BREAKING CHANGES** rework extension/hooks.
+*    **v0.2.0** : **BREAKING CHANGES** rework extension/hooks.
 *    **v0.1.0** : Initial release.
 
 ## Example
@@ -90,7 +90,7 @@ func ExampleCrawl() {
 
 ## API
 
-gocrawl can be described as a minimalist web crawler (hence the "slim" tag, at <1000 sloc), providing the basic engine upon which to build a full-fledged indexing machine with caching, persistence and staleness detection logic, or to use as is for quick and easy crawling. For gocrawl itself does not attempt to detect staleness of a page, nor does it implement a caching mechanism. If an URL is enqueued to be processed, it *will* make a request to fetch it (provided it is allowed by robots.txt - hence the "polite" tag). And there is no prioritization among the URLs to process, it assumes that all enqueued URLs must be visited at some point, and that the order in which they are is unimportant (*subject to change in the future - prioritization __may__ get implemented*).
+Gocrawl can be described as a minimalist web crawler (hence the "slim" tag, at <1000 sloc), providing the basic engine upon which to build a full-fledged indexing machine with caching, persistence and staleness detection logic, or to use as is for quick and easy crawling. Gocrawl itself does not attempt to detect staleness of a page, nor does it implement a caching mechanism. If an URL is enqueued to be processed, it *will* make a request to fetch it (provided it is allowed by robots.txt - hence the "polite" tag). And there is no prioritization among the URLs to process, it assumes that all enqueued URLs must be visited at some point, and that the order in which they are is unimportant - *subject to change in the future, prioritization __may__ get implemented*.
 
 However, it does provide plenty of [hooks and customizations](#hc). Instead of trying to do everything and impose a way to do it, it offers ways to manipulate and adapt it to anyone's needs.
 
@@ -121,6 +121,8 @@ The Options type is detailed in the next section, and it offers a single constru
 
 ### Hooks and customizations
 <a name="hc" />
+
+*TODO: Update this section*
 
 The `Options` type provides the hooks and customizations offered by gocrawl. All but `Extender` are optional and have working defaults.
 
@@ -183,6 +185,7 @@ This last option field, `Extender`, is crucial in using gocrawl, so here are the
 ## Thanks
 
 Richard Penman
+Dmitry Bondarenko
 
 ## License
 
