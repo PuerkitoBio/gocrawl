@@ -4,26 +4,43 @@ package gocrawl
 import (
 	"github.com/PuerkitoBio/purell"
 	"net/url"
+	"reflect"
 	"runtime"
 	"strings"
 	"sync"
 )
 
-// Communication from worker to the master crawler
+// Communication from worker to the master crawler, about the crawling of a URL
 type workerResponse struct {
-	host    string
-	visited bool
-
+	host          string
+	visited       bool
 	sourceUrl     *url.URL
 	harvestedUrls []*url.URL
-
-	idleDeath bool
+	idleDeath     bool
 }
 
 // Communication from crawler to worker, about the URL to request
 type workerCommand struct {
 	u    *url.URL
 	head bool
+}
+
+// EnqueueOrigin indicates to the crawler and the Filter extender function
+// the origin of this URL.
+type EnqueueOrigin int
+
+const (
+	EoSeed        EnqueueOrigin = iota // Seed URLs have this source
+	EoHarvest                          // URLs harvested from a visit to a page have this source
+	EoRedirect                         // URLs enqueued from a fetch redirection have this source by default
+	EoError                            // URLs enqueued after an error
+	EoCustomStart                      // Custom EnqueueOrigins should start at this value instead of iota
+)
+
+// Communication from extender to crawler about an URL to enqueue
+type CrawlerCommand struct {
+	URL    *url.URL
+	Origin EnqueueOrigin
 }
 
 // The crawler itself, the master of the whole process
@@ -33,15 +50,17 @@ type Crawler struct {
 	// Internal fields
 	logFunc   func(LogFlags, string, ...interface{})
 	push      chan *workerResponse
+	enqueue   chan *CrawlerCommand
 	wg        *sync.WaitGroup
 	endReason EndReason
 
 	// keep visited URLs in map, O(1) access time vs O(n) for slice. The byte value
 	// is of no use, but this is the smallest type possible.
-	visited         map[string]byte
+	visited         map[string]byte // TODO : Keep a count of visits instead of useless byte?
 	pushPopRefCount int
 	visits          int
 	workers         map[string]*worker
+	hosts           []string
 }
 
 // Crawler constructor with a pre-initialized Options object.
@@ -59,15 +78,16 @@ func NewCrawler(ext Extender) *Crawler {
 // Run starts the crawling process, based on the given seeds and the current
 // Options settings. Execution stops either when MaxVisits is reached (if specified)
 // or when no more URLs need visiting.
-func (this *Crawler) Run(seeds ...string) {
+func (this *Crawler) Run(seeds ...string) EndReason {
 	seeds = this.Options.Extender.Start(seeds)
 	parsedSeeds := this.init(seeds)
 
 	// Start with the seeds, and loop till death
-	this.enqueueUrls(&workerResponse{"", false, nil, parsedSeeds, false})
+	this.enqueueUrls(parsedSeeds, nil, EoSeed)
 	this.collectUrls()
 
 	this.Options.Extender.End(this.endReason)
+	return this.endReason
 }
 
 // Initialize the Crawler's internal fields before a crawling execution.
@@ -75,8 +95,9 @@ func (this *Crawler) init(seeds []string) []*url.URL {
 	// Helper log function, takes care of filtering based on level
 	this.logFunc = getLogFunc(this.Options.Extender, this.Options.LogFlags, -1)
 
-	// Parse the seeds and get the host count
-	parsedSeeds, hostCount := this.parseSeeds(seeds)
+	// Parse the seeds and initialize the internal hosts slice
+	parsedSeeds := this.parseSeeds(seeds)
+	hostCount := len(this.hosts)
 	l := len(parsedSeeds)
 	this.logFunc(LogTrace, "init() - seeds length: %d", l)
 	this.logFunc(LogTrace, "init() - host count: %d", hostCount)
@@ -92,19 +113,67 @@ func (this *Crawler) init(seeds []string) []*url.URL {
 	// Create the workers map and the push channel (the channel used by workers
 	// to communicate back to the crawler)
 	if this.Options.SameHostOnly {
-		this.workers, this.push = make(map[string]*worker, hostCount), make(chan *workerResponse, hostCount)
+		this.workers, this.push = make(map[string]*worker, hostCount),
+			make(chan *workerResponse, hostCount)
 	} else {
-		this.workers, this.push = make(map[string]*worker, 10*hostCount), make(chan *workerResponse, 10*hostCount)
+		this.workers, this.push = make(map[string]*worker, this.Options.HostBufferFactor*hostCount),
+			make(chan *workerResponse, this.Options.HostBufferFactor*hostCount)
 	}
+	// Create and pass the enqueue channel
+	this.enqueue = make(chan *CrawlerCommand, this.Options.EnqueueChanBuffer)
+	this.setExtenderEnqueueChan()
 
 	return parsedSeeds
 }
 
-// Parse the seeds URL strings to URL objects, and return the URL objects slice,
-// along with the count of distinct hosts.
-func (this *Crawler) parseSeeds(seeds []string) ([]*url.URL, int) {
+// Set the Enqueue channel on the extender, based on the naming convention.
+func (this *Crawler) setExtenderEnqueueChan() {
+	defer func() {
+		if err := recover(); err != nil {
+			// Panic can happen if the field exists on a pointer struct, but that
+			// pointer is nil.
+			this.logFunc(LogError, "cannot set the enqueue channel: %s", err)
+		}
+	}()
+
+	// Using reflection, check if the extender has a `EnqueueChan` field
+	// of type `chan<- *CrawlerCommand`. If it does, set it to the crawler's
+	// enqueue channel.
+	v := reflect.ValueOf(this.Options.Extender)
+	el := v.Elem()
+	if el.Kind() != reflect.Struct {
+		this.logFunc(LogInfo, "extender is not a struct, cannot set the enqueue channel")
+		return
+	}
+	ec := el.FieldByName("EnqueueChan")
+	if !ec.IsValid() {
+		this.logFunc(LogInfo, "extender.EnqueueChan does not exist, cannot set the enqueue channel")
+		return
+	}
+	t := ec.Type()
+	if t.Kind() != reflect.Chan || t.ChanDir() != reflect.SendDir {
+		this.logFunc(LogInfo, "extender.EnqueueChan is not of type chan<-*gocrawl.CrawlerCommand, cannot set the enqueue channel")
+		return
+	}
+	tt := t.Elem()
+	if tt.Kind() != reflect.Ptr {
+		this.logFunc(LogInfo, "extender.EnqueueChan is not of type chan<-*gocrawl.CrawlerCommand, cannot set the enqueue channel")
+		return
+	}
+	ttt := tt.Elem()
+	if ttt.Kind() != reflect.Struct || ttt.Name() != "CrawlerCommand" {
+		this.logFunc(LogInfo, "extender.EnqueueChan is not of type chan<-*gocrawl.CrawlerCommand, cannot set the enqueue channel")
+		return
+	}
+
+	src := reflect.ValueOf(this.enqueue)
+	ec.Set(src)
+}
+
+// Parse the seeds URL strings to URL objects, and return the URL objects slice
+func (this *Crawler) parseSeeds(seeds []string) []*url.URL {
 	// Translate seeds strings to URLs, normalized right away (to allow host count)
-	hosts := make([]string, 0, len(seeds))
+	this.hosts = make([]string, 0, len(seeds))
 	parsedSeeds := make([]*url.URL, 0, len(seeds))
 
 	for _, s := range seeds {
@@ -117,14 +186,14 @@ func (this *Crawler) parseSeeds(seeds []string) ([]*url.URL, int) {
 				this.logFunc(LogError, "ERROR parsing normalized seed %s", u)
 			} else {
 				parsedSeeds = append(parsedSeeds, parsed)
-				if indexInStrings(hosts, parsed.Host) == -1 {
-					hosts = append(hosts, parsed.Host)
+				if indexInStrings(this.hosts, parsed.Host) == -1 {
+					this.hosts = append(this.hosts, parsed.Host)
 				}
 			}
 		}
 	}
 
-	return parsedSeeds, len(hosts)
+	return parsedSeeds
 }
 
 // Launch a new worker goroutine for a given host.
@@ -144,6 +213,7 @@ func (this *Crawler) launchWorker(u *url.URL) *worker {
 		stop,
 		this.wg,
 		nil,
+		this.enqueue,
 		this.Options.CrawlDelay,
 		this.Options.WorkerIdleTTL,
 		nil,
@@ -163,19 +233,37 @@ func (this *Crawler) launchWorker(u *url.URL) *worker {
 	return w
 }
 
+// Check if the specified URL is from the same host as its source URL, or if
+// nil, from the same host as one of the seed URLs.
+func (this *Crawler) isSameHost(u *url.URL, sourceUrl *url.URL) bool {
+	// If there is a source URL, then just check if the new URL is from the same host
+	if sourceUrl != nil {
+		return u.Host == sourceUrl.Host
+	}
+
+	// Otherwise, check if the URL is from one of the seed hosts
+	return indexInStrings(this.hosts, u.Host) != -1
+}
+
 // Enqueue the URLs returned from the worker, as long as it complies with the
 // selection policies.
-func (this *Crawler) enqueueUrls(res *workerResponse) (cnt int) {
-	for _, u := range res.harvestedUrls {
+func (this *Crawler) enqueueUrls(harvestedUrls []*url.URL, sourceUrl *url.URL, origin EnqueueOrigin) (cnt int) {
+	for _, u := range harvestedUrls {
 		var isVisited, enqueue, head bool
 		var hr HeadRequestMode
 
 		// Normalize URL
 		purell.NormalizeURL(u, this.Options.URLNormalizationFlags)
+		// Cannot directly enqueue a robots.txt URL, since it is managed as a special case
+		// in the worker (doesn't return a response to crawler).
+		if isRobotsTxtUrl(u) {
+			continue
+		}
+		// Check if it has been visited before
 		_, isVisited = this.visited[u.String()]
 
 		// Filter the URL - TODO : Priority is ignored at the moment
-		if enqueue, _, hr = this.Options.Extender.Filter(u, res.sourceUrl, isVisited); !enqueue {
+		if enqueue, _, hr = this.Options.Extender.Filter(u, sourceUrl, isVisited, origin); !enqueue {
 			// Filter said NOT to use this url, so continue with next
 			this.logFunc(LogIgnored, "ignore on filter policy: %s", u.String())
 			continue
@@ -190,7 +278,7 @@ func (this *Crawler) enqueueUrls(res *workerResponse) (cnt int) {
 		} else if !strings.HasPrefix(u.Scheme, "http") {
 			this.logFunc(LogIgnored, "ignore on scheme policy: %s", u.String())
 
-		} else if res.sourceUrl != nil && u.Host != res.sourceUrl.Host && this.Options.SameHostOnly {
+		} else if this.Options.SameHostOnly && !this.isSameHost(u, sourceUrl) {
 			// Only allow URLs coming from the same host
 			this.logFunc(LogIgnored, "ignore on same host policy: %s", u.String())
 
@@ -208,14 +296,14 @@ func (this *Crawler) enqueueUrls(res *workerResponse) (cnt int) {
 					this.logFunc(LogError, "ERROR parsing robots.txt from %s: %s", u.String(), e.Error())
 				} else {
 					this.logFunc(LogEnqueued, "enqueue: %s", robUrl.String())
-					this.Options.Extender.Enqueued(robUrl, res.sourceUrl)
+					this.Options.Extender.Enqueued(robUrl, sourceUrl)
 					w.pop.stack(&workerCommand{robUrl, false})
 				}
 			}
 
 			cnt++
 			this.logFunc(LogEnqueued, "enqueue: %s", u.String())
-			this.Options.Extender.Enqueued(u, res.sourceUrl)
+			this.Options.Extender.Enqueued(u, sourceUrl)
 			switch hr {
 			case HrmIgnore:
 				head = false
@@ -272,9 +360,14 @@ func (this *Crawler) collectUrls() {
 				delete(this.workers, res.host)
 				this.logFunc(LogInfo, "worker for host %s cleared on idle policy", res.host)
 			} else {
-				this.enqueueUrls(res)
+				this.enqueueUrls(res.harvestedUrls, res.sourceUrl, EoHarvest)
 				this.pushPopRefCount--
 			}
+
+		case enq := <-this.enqueue:
+			// Received a command to enqueue a URL, proceed
+			this.logFunc(LogTrace, "Received url %s", enq.URL.String())
+			this.enqueueUrls([]*url.URL{enq.URL}, nil, enq.Origin)
 
 		default:
 			// Check if refcount is zero

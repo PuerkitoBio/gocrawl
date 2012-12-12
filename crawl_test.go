@@ -4,6 +4,7 @@ import (
 	"errors"
 	"github.com/PuerkitoBio/goquery"
 	"io/ioutil"
+	"net"
 	"net/http"
 	"net/url"
 	"strings"
@@ -213,7 +214,7 @@ func TestComputeDelay(t *testing.T) {
 }
 
 func TestFilter(t *testing.T) {
-	spy := newSpyExtenderFunc(eMKFilter, func(u *url.URL, from *url.URL, isVisited bool) (enqueue bool, priority int, hrm HeadRequestMode) {
+	spy := newSpyExtenderFunc(eMKFilter, func(u *url.URL, from *url.URL, isVisited bool, o EnqueueOrigin) (enqueue bool, priority int, hrm HeadRequestMode) {
 		return strings.HasSuffix(u.Path, "page1.html"), 0, HrmDefault
 	})
 
@@ -232,7 +233,7 @@ func TestFilter(t *testing.T) {
 func TestNoHead(t *testing.T) {
 	var calledWithHead bool
 
-	ff := newFileFetcher(new(DefaultExtender))
+	ff := newFileFetcher()
 
 	spy := newSpyExtenderFunc(eMKFetch, func(u *url.URL, userAgent string, headRequest bool) (res *http.Response, err error) {
 		if headRequest {
@@ -260,7 +261,7 @@ func TestAllHead(t *testing.T) {
 	var calledWithHead int
 	var calledWithoutHead int
 
-	ff := newFileFetcher(new(DefaultExtender))
+	ff := newFileFetcher()
 
 	spy := newSpyExtenderFunc(eMKFetch, func(u *url.URL, userAgent string, headRequest bool) (res *http.Response, err error) {
 		if headRequest {
@@ -291,7 +292,7 @@ func TestAllHeadWithFetchError(t *testing.T) {
 	var calledWithHead int
 	var calledWithoutHead int
 
-	ff := newFileFetcher(new(DefaultExtender))
+	ff := newFileFetcher()
 
 	spy := newSpyExtenderFunc(eMKFetch, func(u *url.URL, userAgent string, headRequest bool) (res *http.Response, err error) {
 		if headRequest {
@@ -326,7 +327,7 @@ func TestRequestGetFalse(t *testing.T) {
 	var calledWithHead int
 	var calledWithoutHead int
 
-	ff := newFileFetcher(new(DefaultExtender))
+	ff := newFileFetcher()
 
 	spy := newSpyExtenderFunc(eMKFetch, func(u *url.URL, userAgent string, headRequest bool) (res *http.Response, err error) {
 		if headRequest {
@@ -359,13 +360,14 @@ func TestRequestGetFalse(t *testing.T) {
 	assertCallCount(spy, eMKFetch, 6, t) // Once for robots.txt and page2, twice each for page1 and page3
 	assertCallCount(spy, eMKRequestGet, 3, t)
 	assertCallCount(spy, eMKEnqueued, 4, t)
+	assertCallCount(spy, eMKVisit, 2, t)
 }
 
 func TestHeadTrueFilterOverride(t *testing.T) {
 	var calledWithHead int
 	var calledWithoutHead int
 
-	ff := newFileFetcher(new(DefaultExtender))
+	ff := newFileFetcher()
 	spy := newSpyExtenderFunc(eMKFetch, func(u *url.URL, userAgent string, headRequest bool) (res *http.Response, err error) {
 		if headRequest {
 			calledWithHead += 1
@@ -376,7 +378,7 @@ func TestHeadTrueFilterOverride(t *testing.T) {
 	})
 
 	// Page2: No get, Page3: No enqueue
-	spy.setExtensionMethod(eMKFilter, func(u *url.URL, from *url.URL, isVisited bool) (enqueue bool, priority int, headRequest HeadRequestMode) {
+	spy.setExtensionMethod(eMKFilter, func(u *url.URL, from *url.URL, isVisited bool, o EnqueueOrigin) (enqueue bool, priority int, headRequest HeadRequestMode) {
 		if u.Path == "/page2.html" {
 			return !isVisited, 0, HrmIgnore
 		} else if u.Path == "/page3.html" {
@@ -409,7 +411,7 @@ func TestHeadFalseFilterOverride(t *testing.T) {
 	var calledWithHead int
 	var calledWithoutHead int
 
-	ff := newFileFetcher(new(DefaultExtender))
+	ff := newFileFetcher()
 	spy := newSpyExtenderFunc(eMKFetch, func(u *url.URL, userAgent string, headRequest bool) (res *http.Response, err error) {
 		if headRequest {
 			calledWithHead += 1
@@ -420,7 +422,7 @@ func TestHeadFalseFilterOverride(t *testing.T) {
 	})
 
 	// Page1: default, Page2: Head before get, Page3: No enqueue
-	spy.setExtensionMethod(eMKFilter, func(u *url.URL, from *url.URL, isVisited bool) (enqueue bool, priority int, headRequest HeadRequestMode) {
+	spy.setExtensionMethod(eMKFilter, func(u *url.URL, from *url.URL, isVisited bool, o EnqueueOrigin) (enqueue bool, priority int, headRequest HeadRequestMode) {
 		if u.Path == "/page2.html" {
 			return !isVisited, 0, HrmRequest
 		} else if u.Path == "/page3.html" {
@@ -489,7 +491,7 @@ func TestCrawlDelay(t *testing.T) {
 	var since []time.Duration
 	cnt := 0
 
-	ff := newFileFetcher(new(DefaultExtender))
+	ff := newFileFetcher()
 	spy := newSpyExtenderFunc(eMKFetch, func(u *url.URL, userAgent string, headRequest bool) (res *http.Response, err error) {
 		since = append(since, time.Now().Sub(last))
 		last = time.Now()
@@ -519,5 +521,42 @@ func TestCrawlDelay(t *testing.T) {
 		if d < min {
 			t.Errorf("Expected a delay of at least %v for fetch #%d, got %v.", min, i, d)
 		}
+	}
+}
+
+func TestUserAgent(t *testing.T) {
+	// Create crawler, with all defaults
+	c := NewCrawler(new(DefaultExtender))
+	c.Options.CrawlDelay = 10 * time.Millisecond
+
+	// Create server
+	l, err := net.Listen("tcp", ":8080")
+	if err != nil {
+		t.Fatal(err)
+	}
+	http.HandleFunc("/robots.txt", func(w http.ResponseWriter, r *http.Request) {
+		// Expect robots.txt user agent
+		if r.UserAgent() != c.Options.RobotUserAgent {
+			t.Errorf("Expected user-agent %s, got %s", c.Options.RobotUserAgent, r.UserAgent())
+		}
+	})
+	http.HandleFunc("/bidon", func(w http.ResponseWriter, r *http.Request) {
+		// Expect crawl user agent
+		if r.UserAgent() != c.Options.UserAgent {
+			t.Errorf("Expected user-agent %s, got %s", c.Options.UserAgent, r.UserAgent())
+		}
+	})
+
+	// Start server in a separate goroutine
+	go func() {
+		http.Serve(l, nil)
+	}()
+
+	// Go crawl
+	c.Run("http://localhost:8080/bidon")
+
+	// Close listener
+	if err = l.Close(); err != nil {
+		t.Fatal(err)
 	}
 }
