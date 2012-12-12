@@ -27,7 +27,7 @@ func (this *ExampleExtender) Visit(res *http.Response, doc *goquery.Document) ([
 }
 
 // Override Filter for our need.
-func (this *ExampleExtender) Filter(u *url.URL, src *url.URL, isVisited bool) (bool, int, HeadRequestMode) {
+func (this *ExampleExtender) Filter(u *url.URL, src *url.URL, isVisited bool, origin EnqueueOrigin) (bool, int, HeadRequestMode) {
 	// Priority (2nd return value) is ignored at the moment
 	return rxOk.MatchString(u.String()), 0, HrmDefault
 }

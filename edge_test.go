@@ -15,13 +15,15 @@ func xTestBasicRealHttpRequests(t *testing.T) {
 	c.Run("http://provok.in")
 }
 
-func xTestNonHtmlRequest(t *testing.T) {
+func TestNonHtmlRequest(t *testing.T) {
 	c := NewCrawler(new(DefaultExtender))
 
-	c.Options.CrawlDelay = DefaultCrawlDelay
-	c.Options.LogFlags = LogAll
+	c.Options.CrawlDelay = DefaultTestCrawlDelay
+	c.Options.LogFlags = LogError
 
-	c.Run("https://lh4.googleusercontent.com/-v0soe-ievYE/AAAAAAAAAAI/AAAAAAAAs7Y/_UbxpxC-VG0/photo.jpg")
+	if er := c.Run("https://lh4.googleusercontent.com/-v0soe-ievYE/AAAAAAAAAAI/AAAAAAAAs7Y/_UbxpxC-VG0/photo.jpg"); er != ErDone {
+		t.Fatalf("Expected end reason %s, got %s", ErDone, er)
+	}
 }
 
 func TestInvalidSeed(t *testing.T) {
