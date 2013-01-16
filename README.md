@@ -19,7 +19,7 @@ gocrawl depends on the following userland libraries:
 *    [purell][]
 *    [robotstxt.go][robots]
 
-Because of its dependency on goquery, **it requires Go's experimental html package to be installed [by following these instructions][exp] prior to the installation of gocrawl**.
+Because of its dependency on goquery, **it requires Go's experimental html package to be installed [by following these instructions][exp] prior to the installation of gocrawl (replace the second step with `hg clone -r d9ff34d481bc https://code.google.com/p/go go-exp`, since this is the last revision that compiles with Go1.0.3)**.
 
 Once this is done, gocrawl may be installed as usual:
 
