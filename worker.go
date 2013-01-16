@@ -236,14 +236,16 @@ func (this *worker) fetchUrl(u *url.URL, agent string, headRequest bool) (res *h
 					// "real" error. We either enqueue the new URL, or fail to parse it,
 					// and then stop processing the current URL.
 					silent = true
-					if u, e := url.Parse(ue.URL); e != nil {
+					// Parse the URL in the context of the original URL (so that relative URLs are ok).
+					// Absolute URLs that point to another host are ok too.
+					if ur, e := u.Parse(ue.URL); e != nil {
 						// Notify error
 						this.extender.Error(newCrawlError(e, CekParseRedirectUrl, nil))
 						this.logFunc(LogError, "ERROR parsing redirect URL %s: %s", ue.URL, e.Error())
 					} else {
 						// Enqueue the redirect-to URL
-						this.logFunc(LogTrace, "redirect to %s", u.String())
-						this.enqueue <- &CrawlerCommand{u, EoRedirect}
+						this.logFunc(LogTrace, "redirect to %s", ur.String())
+						this.enqueue <- &CrawlerCommand{ur, EoRedirect}
 					}
 				}
 			}

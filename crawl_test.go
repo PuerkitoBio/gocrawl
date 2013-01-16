@@ -1,6 +1,7 @@
 package gocrawl
 
 import (
+	"bytes"
 	"errors"
 	"github.com/PuerkitoBio/goquery"
 	"io/ioutil"
@@ -559,4 +560,24 @@ func TestUserAgent(t *testing.T) {
 	if err = l.Close(); err != nil {
 		t.Fatal(err)
 	}
+}
+
+type ext struct {
+	*DefaultExtender
+	b *bytes.Buffer
+}
+
+func (e *ext) Log(logFlags LogFlags, msgLevel LogFlags, msg string) {
+	if logFlags&msgLevel == msgLevel {
+		e.b.WriteString(msg)
+		e.b.WriteRune('\n')
+	}
+}
+func TestCircularRedirect(t *testing.T) {
+	e := &ext{new(DefaultExtender), new(bytes.Buffer)}
+	c := NewCrawler(e)
+	c.Options.LogFlags = LogAll
+	c.Run("http://golang.org/pkg")
+	s := "ignore on absolute policy: /pkg"
+	assertIsNotInLog(*e.b, s, t)
 }

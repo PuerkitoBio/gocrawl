@@ -9,7 +9,7 @@ import (
 )
 
 // Only enqueue the root and paths beginning with an "a"
-var rxOk = regexp.MustCompile(`http://duckduckgo\.com(/a.*)?$`)
+var rxOk = regexp.MustCompile(`https://duckduckgo\.com(/a.*)?$`)
 
 // Create the Extender implementation, based on the gocrawl-provided DefaultExtender,
 // because we don't want/need to override all methods.
@@ -43,7 +43,7 @@ func ExampleCrawl() {
 
 	// Create crawler and start at root of duckduckgo
 	c := NewCrawlerWithOptions(opts)
-	c.Run("http://duckduckgo.com/")
+	c.Run("https://duckduckgo.com/")
 
 	// Remove "x" before Output: to activate the example (will run on go test)
 

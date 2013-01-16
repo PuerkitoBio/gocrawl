@@ -276,8 +276,20 @@ func runFileFetcherWithOptions(opts *Options, urlSel []string, seeds []string) (
 }
 
 func assertIsInLog(buf bytes.Buffer, s string, t *testing.T) {
-	if lg := buf.String(); !strings.Contains(lg, s) {
-		t.Errorf("Expected log to contain %s.", s)
+	assertLog(buf, s, true, t)
+}
+
+func assertIsNotInLog(buf bytes.Buffer, s string, t *testing.T) {
+	assertLog(buf, s, false, t)
+}
+
+func assertLog(buf bytes.Buffer, s string, in bool, t *testing.T) {
+	if lg := buf.String(); strings.Contains(lg, s) != in {
+		if in {
+			t.Errorf("Expected log to contain %s.", s)
+		} else {
+			t.Errorf("Expected log NOT to contain %s.", s)
+		}
 		t.Logf("Log is: %s", lg)
 	}
 }
