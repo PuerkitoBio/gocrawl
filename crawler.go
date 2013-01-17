@@ -177,15 +177,25 @@ func (this *Crawler) parseSeeds(seeds []string) []*url.URL {
 	parsedSeeds := make([]*url.URL, 0, len(seeds))
 
 	for _, s := range seeds {
+		// Very deliberately ignore error. If the string URL is not parseable, the normalization
+		// will fail, so we will get the error (and propagate it) there. The parsed original
+		// URL will only be returned if normalization succeeded.
+		oriU, _ := url.Parse(s)
+
+		// Normalize the URL, so that the host count is based on normalized data.
 		if u, e := purell.NormalizeURLString(s, this.Options.URLNormalizationFlags); e != nil {
 			this.Options.Extender.Error(newCrawlError(e, CekParseSeed, nil))
 			this.logFunc(LogError, "ERROR parsing seed %s", s)
 		} else {
+			// Parse into a URL object the normalized URL (to use its .Host field)
 			if parsed, e := url.Parse(u); e != nil {
 				this.Options.Extender.Error(newCrawlError(e, CekParseNormalizedSeed, nil))
 				this.logFunc(LogError, "ERROR parsing normalized seed %s", u)
 			} else {
-				parsedSeeds = append(parsedSeeds, parsed)
+				// Add the ORIGINAL parsed URL to the parsedSeeds slice (if the normalized URL
+				// could be parsed, the original could too).
+				parsedSeeds = append(parsedSeeds, oriU)
+				// Add this normalized URL's host if it is not already there.
 				if indexInStrings(this.hosts, parsed.Host) == -1 {
 					this.hosts = append(this.hosts, parsed.Host)
 				}
