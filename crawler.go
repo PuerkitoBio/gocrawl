@@ -22,6 +22,7 @@ type workerResponse struct {
 // Communication from crawler to worker, about the URL to request
 type workerCommand struct {
 	u    *url.URL
+	rawU *url.URL
 	head bool
 }
 
@@ -262,6 +263,9 @@ func (this *Crawler) enqueueUrls(harvestedUrls []*url.URL, sourceUrl *url.URL, o
 		var isVisited, enqueue, head bool
 		var hr HeadRequestMode
 
+		// Create a copy of the original url
+		rawU := *u
+
 		// Normalize URL
 		purell.NormalizeURL(u, this.Options.URLNormalizationFlags)
 		// Cannot directly enqueue a robots.txt URL, since it is managed as a special case
@@ -295,6 +299,13 @@ func (this *Crawler) enqueueUrls(harvestedUrls []*url.URL, sourceUrl *url.URL, o
 		} else {
 			// All is good, visit this URL (robots.txt verification is done by worker)
 
+			// Possible caveat: if the normalization changes the host, it is possible
+			// that the robots.txt fetched for this host would differ from the one for
+			// the unnormalized host. However, this should be rare, and is a weird
+			// behaviour from the host (i.e. why would site.com differ in its rules
+			// from www.site.com) and can be fixed by using a different normalization
+			// flag. So this is an acceptable behaviour for gocrawl.
+
 			// Launch worker if required
 			w, ok := this.workers[u.Host]
 			if !ok {
@@ -307,7 +318,7 @@ func (this *Crawler) enqueueUrls(harvestedUrls []*url.URL, sourceUrl *url.URL, o
 				} else {
 					this.logFunc(LogEnqueued, "enqueue: %s", robUrl.String())
 					this.Options.Extender.Enqueued(robUrl, sourceUrl)
-					w.pop.stack(&workerCommand{robUrl, false})
+					w.pop.stack(&workerCommand{robUrl, robUrl, false})
 				}
 			}
 
@@ -322,7 +333,7 @@ func (this *Crawler) enqueueUrls(harvestedUrls []*url.URL, sourceUrl *url.URL, o
 			default:
 				head = this.Options.HeadBeforeGet
 			}
-			w.pop.stack(&workerCommand{u, head})
+			w.pop.stack(&workerCommand{u, &rawU, head})
 			this.pushPopRefCount++
 
 			// Once it is stacked, it WILL be visited eventually, so add it to the visited slice
