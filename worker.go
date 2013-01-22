@@ -76,7 +76,7 @@ func (this *worker) run() {
 
 		case batch := <-this.pop:
 
-			// Got a batch of urls to crawl, loop and check at each iteration if a stop 
+			// Got a batch of urls to crawl, loop and check at each iteration if a stop
 			// is received.
 			for _, cmd := range batch {
 				this.logFunc(LogInfo, "popped: %s", cmd.u.String())

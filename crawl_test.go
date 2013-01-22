@@ -1,7 +1,6 @@
 package gocrawl
 
 import (
-	"bytes"
 	"errors"
 	"github.com/PuerkitoBio/goquery"
 	"io/ioutil"
@@ -562,22 +561,40 @@ func TestUserAgent(t *testing.T) {
 	}
 }
 
-type ext struct {
-	*DefaultExtender
-	b *bytes.Buffer
+// Test issue #10
+func TestRedirectRelative(t *testing.T) {
+	s := newSpy(new(DefaultExtender), true)
+	c := NewCrawler(s)
+	c.Options.LogFlags = LogAll
+	c.Run("http://golang.org/pkg") // Will redirect to /pkg/, then normalized to /pkg
+	str := "ignore on absolute policy: /pkg"
+	assertIsNotInLog(s.b, str, t)
 }
 
-func (e *ext) Log(logFlags LogFlags, msgLevel LogFlags, msg string) {
-	if logFlags&msgLevel == msgLevel {
-		e.b.WriteString(msg)
-		e.b.WriteRune('\n')
-	}
-}
+// Test issue #10
 func TestCircularRedirect(t *testing.T) {
-	e := &ext{new(DefaultExtender), new(bytes.Buffer)}
-	c := NewCrawler(e)
+	var cnt int
+
+	s := newSpy(new(DefaultExtender), true)
+	s.setExtensionMethod(eMKFilter, func(target *url.URL, from *url.URL, isVisited bool, origin EnqueueOrigin) (bool, int, HeadRequestMode) {
+		// Always enqueue if /pkg, ignore all others
+		if target.Path == "/pkg" {
+			cnt++
+			if cnt <= 2 {
+				// Should filter only twice, /pkg and /pkg/, otherwise, circular problem
+				return true, 0, HrmDefault
+			}
+		}
+		return false, 0, HrmDefault
+	})
+
+	c := NewCrawler(s)
+	c.Options.MaxVisits = 1
 	c.Options.LogFlags = LogAll
-	c.Run("http://golang.org/pkg")
-	s := "ignore on absolute policy: /pkg"
-	assertIsNotInLog(*e.b, s, t)
+	c.Run("http://golang.org/pkg") // Will redirect to /pkg/, then normalized to /pkg, hence the problematic loop
+	if cnt > 2 {
+		t.Errorf("Expected only 2 calls to Filter, one for /pkg and one for /pkg/, got %d", cnt)
+	}
+	assertCallCount(s, eMKEnqueued, 3, t) // Expect 3 Enqueued calls: robots, /pkg (redirects), /pkg/
+	assertCallCount(s, eMKVisited, 1, t)  // Expect 1 visit : /pkg/ (robots don't trigger visited)
 }

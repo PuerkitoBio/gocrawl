@@ -22,7 +22,6 @@ type workerResponse struct {
 // Communication from crawler to worker, about the URL to request
 type workerCommand struct {
 	u    *url.URL
-	rawU *url.URL
 	head bool
 }
 
@@ -264,7 +263,8 @@ func (this *Crawler) enqueueUrls(harvestedUrls []*url.URL, sourceUrl *url.URL, o
 		var hr HeadRequestMode
 
 		// Create a copy of the original url
-		rawU := *u
+		var rawU url.URL
+		rawU = *u
 
 		// Normalize URL
 		purell.NormalizeURL(u, this.Options.URLNormalizationFlags)
@@ -273,10 +273,11 @@ func (this *Crawler) enqueueUrls(harvestedUrls []*url.URL, sourceUrl *url.URL, o
 		if isRobotsTxtUrl(u) {
 			continue
 		}
-		// Check if it has been visited before
+		// Check if it has been visited before, using the normalized URL
 		_, isVisited = this.visited[u.String()]
 
 		// Filter the URL - TODO : Priority is ignored at the moment
+		// The normalized URL is used for Filter
 		if enqueue, _, hr = this.Options.Extender.Filter(u, sourceUrl, isVisited, origin); !enqueue {
 			// Filter said NOT to use this url, so continue with next
 			this.logFunc(LogIgnored, "ignore on filter policy: %s", u.String())
@@ -284,15 +285,15 @@ func (this *Crawler) enqueueUrls(harvestedUrls []*url.URL, sourceUrl *url.URL, o
 		}
 
 		// Even if filter said to use the URL, it still MUST be absolute, http(s)-prefixed,
-		// and comply with the same host policy if requested.
+		// and comply with the same host policy if requested. Use normalized URL.
 		if !u.IsAbs() {
 			// Only absolute URLs are processed, so ignore
 			this.logFunc(LogIgnored, "ignore on absolute policy: %s", u.String())
 
-		} else if !strings.HasPrefix(u.Scheme, "http") {
+		} else if !strings.HasPrefix(u.Scheme, "http") { // Again, normalized URL
 			this.logFunc(LogIgnored, "ignore on scheme policy: %s", u.String())
 
-		} else if this.Options.SameHostOnly && !this.isSameHost(u, sourceUrl) {
+		} else if this.Options.SameHostOnly && !this.isSameHost(u, sourceUrl) { // Again, normalized URL
 			// Only allow URLs coming from the same host
 			this.logFunc(LogIgnored, "ignore on same host policy: %s", u.String())
 
@@ -306,7 +307,7 @@ func (this *Crawler) enqueueUrls(harvestedUrls []*url.URL, sourceUrl *url.URL, o
 			// from www.site.com) and can be fixed by using a different normalization
 			// flag. So this is an acceptable behaviour for gocrawl.
 
-			// Launch worker if required
+			// Launch worker if required, based on the host of the normalized URL
 			w, ok := this.workers[u.Host]
 			if !ok {
 				// No worker exists for this host, launch a new one
@@ -318,13 +319,13 @@ func (this *Crawler) enqueueUrls(harvestedUrls []*url.URL, sourceUrl *url.URL, o
 				} else {
 					this.logFunc(LogEnqueued, "enqueue: %s", robUrl.String())
 					this.Options.Extender.Enqueued(robUrl, sourceUrl)
-					w.pop.stack(&workerCommand{robUrl, robUrl, false})
+					w.pop.stack(&workerCommand{robUrl, false})
 				}
 			}
 
 			cnt++
-			this.logFunc(LogEnqueued, "enqueue: %s", u.String())
-			this.Options.Extender.Enqueued(u, sourceUrl)
+			this.logFunc(LogEnqueued, "enqueue: %s", rawU.String())
+			this.Options.Extender.Enqueued(&rawU, sourceUrl)
 			switch hr {
 			case HrmIgnore:
 				head = false
@@ -333,13 +334,15 @@ func (this *Crawler) enqueueUrls(harvestedUrls []*url.URL, sourceUrl *url.URL, o
 			default:
 				head = this.Options.HeadBeforeGet
 			}
-			w.pop.stack(&workerCommand{u, &rawU, head})
+			// The non-normalized URL is enqueued.
+			w.pop.stack(&workerCommand{&rawU, head})
 			this.pushPopRefCount++
 
 			// Once it is stacked, it WILL be visited eventually, so add it to the visited slice
 			// (unless denied by robots.txt, but this is out of our hands, for all we
 			// care, it is visited).
 			if !isVisited {
+				// The visited map works with the normalized URL
 				this.visited[u.String()] = '0'
 			}
 		}
