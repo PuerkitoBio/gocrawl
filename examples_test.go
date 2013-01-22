@@ -9,7 +9,7 @@ import (
 )
 
 // Only enqueue the root and paths beginning with an "a"
-var rxOk = regexp.MustCompile(`https://duckduckgo\.com(/a.*)?$`)
+var rxOk = regexp.MustCompile(`http://duckduckgo\.com(/a.*)?$`)
 
 // Create the Extender implementation, based on the gocrawl-provided DefaultExtender,
 // because we don't want/need to override all methods.
@@ -29,14 +29,14 @@ func (this *ExampleExtender) Visit(res *http.Response, doc *goquery.Document) ([
 // Override Filter for our need.
 func (this *ExampleExtender) Filter(u *url.URL, src *url.URL, isVisited bool, origin EnqueueOrigin) (bool, int, HeadRequestMode) {
 	// Priority (2nd return value) is ignored at the moment
-	return rxOk.MatchString(u.String()), 0, HrmDefault
+	return !isVisited && rxOk.MatchString(u.String()), 0, HrmDefault
 }
 
 func ExampleCrawl() {
 	// Set custom options
 	opts := NewOptions(new(ExampleExtender))
 	opts.CrawlDelay = 1 * time.Second
-	opts.LogFlags = LogError | LogInfo
+	opts.LogFlags = LogAll
 
 	// Play nice with ddgo when running the test!
 	opts.MaxVisits = 2

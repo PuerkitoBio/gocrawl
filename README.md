@@ -27,6 +27,7 @@ Once this is done, gocrawl may be installed as usual:
 
 ## Changelog
 
+*    **v0.3.0** : **BEHAVIOR CHANGE** filter done with normalized URL, fetch done with original, non-normalized URL (see [issue #10][i10]).
 *    **v0.2.0** : **BREAKING CHANGES** rework extension/hooks.
 *    **v0.1.0** : Initial release.
 
@@ -64,23 +65,23 @@ func (this *ExampleExtender) Visit(res *http.Response, doc *goquery.Document) ([
 }
 
 // Override Filter for our need.
-func (this *ExampleExtender) Filter(u *url.URL, src *url.URL, isVisited bool) (bool, int, HeadRequestMode) {
+func (this *ExampleExtender) Filter(u *url.URL, src *url.URL, isVisited bool, origin EnqueueOrigin) (bool, int, HeadRequestMode) {
   // Priority (2nd return value) is ignored at the moment
-  return rxOk.MatchString(u.String()), 0, HrmDefault
+  return !isVisited && rxOk.MatchString(u.String()), 0, HrmDefault
 }
 
 func ExampleCrawl() {
   // Set custom options
   opts := NewOptions(new(ExampleExtender))
   opts.CrawlDelay = 1 * time.Second
-  opts.LogFlags = LogError | LogInfo
+  opts.LogFlags = LogAll
 
   // Play nice with ddgo when running the test!
   opts.MaxVisits = 2
 
   // Create crawler and start at root of duckduckgo
   c := NewCrawlerWithOptions(opts)
-  c.Run("http://duckduckgo.com/")
+  c.Run("https://duckduckgo.com/")
 
   // Remove "x" before Output: to activate the example (will run on go test)
 
@@ -162,7 +163,7 @@ This last option field, `Extender`, is crucial in using gocrawl, so here are the
 
 *    **ComputeDelay** : `ComputeDelay(host string, di *DelayInfo, lastFetch *FetchInfo) time.Duration`. Called by a worker before requesting a URL. Arguments are the host's name, the crawl delay information (delays from the Options struct, from the robots.txt, and the last used delay), and the last fetch information, so that it is possible to adapt to the current responsiveness of the host. It returns the delay to use. 
 
-*    **Fetch** : `Fetch(u *url.URL, userAgent string, headRequest bool) (*http.Response, error)`. Called by a worker to request the URL. The `DefaultExtender.Fetch()` implementation uses a custom `http.Client` to fetch the pages *without* following redirections, instead returning an error so that the worker can enqueue the redirect-to URL. This enforces the whitelisting by the `Filter()` of every URL fetched by the crawling process. If `headRequest` is `true`, a HEAD request is made instead of a GET.
+*    **Fetch** : `Fetch(u *url.URL, userAgent string, headRequest bool) (*http.Response, error)`. Called by a worker to request the URL. The `DefaultExtender.Fetch()` implementation uses a custom `http.Client` to fetch the pages *without* following redirections, instead returning an error so that the worker can enqueue the redirect-to URL. This enforces the whitelisting by the `Filter()` of every URL fetched by the crawling process. If `headRequest` is `true`, a HEAD request is made instead of a GET. Note that as of gocrawl v0.3, `Fetch` is called with the non-normalized URL.
 
     Internally, gocrawl sets its http.Client's `CheckRedirect()` function field to a custom implementation that follows redirections for robots.txt URLs only (since a redirect on robots.txt still means that the site owner wants us to use these rules for this host). The worker is aware of the `*gocrawl.EnqueueRedirectError` error, so if a non-robots.txt URL asks for a redirection, `CheckRedirect()` returns an instance of this error, and the worker recognizes this and enqueues the redirect-to URL, stopping the processing of the current URL. It is possible to provide a custom `Fetch()` implementation based on the same logic. Any `CheckRedirect()` implementation that returns a `*gocrawl.EnqueueRedirectError` error will behave this way - that is, the worker will detect this error and will enqueue the redirect-to URL. See the source files ext.go and worker.go for details.
 
@@ -172,13 +173,13 @@ This last option field, `Extender`, is crucial in using gocrawl, so here are the
 
 *    **FetchedRobots** : `FetchedRobots(res *http.Response)`. Called when the robots.txt URL has been fetched from the host, so that it is possible to cache its content and feed it back to future `RequestRobots()` calls. By default, this is a no-op.
 
-*    **Filter** : `Filter(u *url.URL, from *url.URL, isVisited bool, origin EnqueueOrigin) (enqueue bool, priority int, headRequest HeadRequestMode)`. Called when deciding if a URL should be enqueued for visiting. It receives the target `*url.URL` link, the source `*url.URL` link (where this URL was found, `nil` for the seeds or for manually enqueued URLs, via the enqueue channel - see below), a `bool` is visited flag, indicating if this URL has already been visited in this crawling execution, and an origin (which can be extended to create custom origins, starting at `EoCustomStart` instead of `iota`). It returns a `bool` flag ordering gocrawl to visit (`true`) or ignore (`false`) the URL, a priority value, **ignored at the moment**, and whether or not to request a HEAD before a GET (if `HrmDefault` is returned, the global `HeadBeforeGet` setting is used, while `HrmRequest` and `HrmIgnore` override the global setting). Even if the function returns `true` to enqueue the URL for visiting, it must still comply to these rules:
+*    **Filter** : `Filter(u *url.URL, from *url.URL, isVisited bool, origin EnqueueOrigin) (enqueue bool, priority int, headRequest HeadRequestMode)`. Called when deciding if a URL should be enqueued for visiting. It receives the target `*url.URL` link in normalized form, the source `*url.URL` link (where this URL was found, `nil` for the seeds or for manually enqueued URLs, via the enqueue channel - see below), a `bool` is visited flag, indicating if this URL has already been visited in this crawling execution, and an origin (which can be extended to create custom origins, starting at `EoCustomStart` instead of `iota`). It returns a `bool` flag ordering gocrawl to visit (`true`) or ignore (`false`) the URL, a priority value, **ignored at the moment**, and whether or not to request a HEAD before a GET (if `HrmDefault` is returned, the global `HeadBeforeGet` setting is used, while `HrmRequest` and `HrmIgnore` override the global setting). Even if the function returns `true` to enqueue the URL for visiting, the normalized form of the URL must still comply to these rules:
 
 1. It must be an absolute URL 
 2. It must have a `http/https` scheme
 3. It must have the same host if the `SameHostOnly` flag is set
 
-    The `DefaultExtender.Filter` implementation returns `true` if the URL has not been visited yet, false otherwise. It returns `0` for the priority and `HrmDefault` for the head request.
+    The `DefaultExtender.Filter` implementation returns `true` if the URL has not been visited yet (the *visited* flag is based on the normalized version of the URLs), false otherwise. It returns `0` for the priority and `HrmDefault` for the head request.
 
 *    **Enqueued** : `Enqueued(u *url.URL, from *url.URL)`. Called when a URL has been enqueued by the crawler. An enqueued URL may still be disallowed by a robots.txt policy, so it may end up *not* being fetched.
 
@@ -214,3 +215,4 @@ The [BSD 3-Clause license][bsd].
 [er]: http://go.pkgdoc.org/github.com/PuerkitoBio/gocrawl#EndReason
 [ce]: http://go.pkgdoc.org/github.com/PuerkitoBio/gocrawl#CrawlError
 [gotalk]: http://talks.golang.org/2012/chat.slide#32
+[i10]: https://github.com/PuerkitoBio/gocrawl/issues/10

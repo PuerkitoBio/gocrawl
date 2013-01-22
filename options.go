@@ -8,7 +8,7 @@ import (
 // Default options
 const (
 	DefaultUserAgent          string                    = `Mozilla/5.0 (Windows NT 6.1; rv:15.0) Gecko/20120716 Firefox/15.0a2`
-	DefaultRobotUserAgent     string                    = `Googlebot (gocrawl v0.2)`
+	DefaultRobotUserAgent     string                    = `Googlebot (gocrawl v0.3)`
 	DefaultEnqueueChanBuffer  int                       = 100
 	DefaultHostBufferFactor   int                       = 10
 	DefaultCrawlDelay         time.Duration             = 5 * time.Second
