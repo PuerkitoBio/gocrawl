@@ -54,9 +54,9 @@ type Crawler struct {
 	wg        *sync.WaitGroup
 	endReason EndReason
 
-	// keep visited URLs in map, O(1) access time vs O(n) for slice. The byte value
-	// is of no use, but this is the smallest type possible.
-	visited         map[string]byte // TODO : Keep a count of visits instead of useless byte?
+	// keep visited URLs in map, O(1) access time vs O(n) for slice. The empty struct value
+	// is of no use, but this is the smallest type possible - it uses no memory at all.
+	visited         map[string]struct{}
 	pushPopRefCount int
 	visits          int
 	workers         map[string]*worker
@@ -107,7 +107,7 @@ func (this *Crawler) init(seeds []string) []*url.URL {
 	this.wg = new(sync.WaitGroup)
 
 	// Initialize the visits fields
-	this.visited = make(map[string]byte, l)
+	this.visited = make(map[string]struct{}, l)
 	this.pushPopRefCount, this.visits = 0, 0
 
 	// Create the workers map and the push channel (the channel used by workers
@@ -343,7 +343,7 @@ func (this *Crawler) enqueueUrls(harvestedUrls []*url.URL, sourceUrl *url.URL, o
 			// care, it is visited).
 			if !isVisited {
 				// The visited map works with the normalized URL
-				this.visited[u.String()] = '0'
+				this.visited[u.String()] = struct{}{}
 			}
 		}
 	}
