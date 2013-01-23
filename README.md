@@ -27,6 +27,7 @@ Once this is done, gocrawl may be installed as usual:
 
 ## Changelog
 
+*    **v0.3.1** : Export the `HttpClient` variable used by the default `Fetch()` implementation (see [issue #9][i9]).
 *    **v0.3.0** : **BEHAVIOR CHANGE** filter done with normalized URL, fetch done with original, non-normalized URL (see [issue #10][i10]).
 *    **v0.2.0** : **BREAKING CHANGES** rework extension/hooks.
 *    **v0.1.0** : Initial release.
@@ -163,9 +164,11 @@ This last option field, `Extender`, is crucial in using gocrawl, so here are the
 
 *    **ComputeDelay** : `ComputeDelay(host string, di *DelayInfo, lastFetch *FetchInfo) time.Duration`. Called by a worker before requesting a URL. Arguments are the host's name, the crawl delay information (delays from the Options struct, from the robots.txt, and the last used delay), and the last fetch information, so that it is possible to adapt to the current responsiveness of the host. It returns the delay to use. 
 
-*    **Fetch** : `Fetch(u *url.URL, userAgent string, headRequest bool) (*http.Response, error)`. Called by a worker to request the URL. The `DefaultExtender.Fetch()` implementation uses a custom `http.Client` to fetch the pages *without* following redirections, instead returning an error so that the worker can enqueue the redirect-to URL. This enforces the whitelisting by the `Filter()` of every URL fetched by the crawling process. If `headRequest` is `true`, a HEAD request is made instead of a GET. Note that as of gocrawl v0.3, `Fetch` is called with the non-normalized URL.
+*    **Fetch** : `Fetch(u *url.URL, userAgent string, headRequest bool) (*http.Response, error)`. Called by a worker to request the URL. The `DefaultExtender.Fetch()` implementation uses the public `HttpClient` variable (a custom `http.Client`) to fetch the pages *without* following redirections, instead returning an error so that the worker can enqueue the redirect-to URL. This enforces the whitelisting by the `Filter()` of every URL fetched by the crawling process. If `headRequest` is `true`, a HEAD request is made instead of a GET. Note that as of gocrawl v0.3, `Fetch` is called with the non-normalized URL.
 
     Internally, gocrawl sets its http.Client's `CheckRedirect()` function field to a custom implementation that follows redirections for robots.txt URLs only (since a redirect on robots.txt still means that the site owner wants us to use these rules for this host). The worker is aware of the `*gocrawl.EnqueueRedirectError` error, so if a non-robots.txt URL asks for a redirection, `CheckRedirect()` returns an instance of this error, and the worker recognizes this and enqueues the redirect-to URL, stopping the processing of the current URL. It is possible to provide a custom `Fetch()` implementation based on the same logic. Any `CheckRedirect()` implementation that returns a `*gocrawl.EnqueueRedirectError` error will behave this way - that is, the worker will detect this error and will enqueue the redirect-to URL. See the source files ext.go and worker.go for details.
+
+    The `HttpClient` variable being public, it is possible to customize it so that it uses another `CheckRedirect()` function, or a different `Transport` object, etc. This customization should be done prior to starting the crawler. It will then be used by the default `Fetch()` implementation, or it can also be used by a custom `Fetch()` if required. Note that this client is shared by all crawlers in your application. Should you need different http clients per crawler in the same application, a custom `Fetch()` using a private `http.Client` instance should be provided.
 
 *    **RequestGet** : `RequestGet(headRes *http.Response) bool`. Indicates if the crawler should proceed with a GET request based on the HEAD request's response. This method is only called if a HEAD was requested (either via the global `HeadBeforeGet` option, or via the `Filter()` return value). The default implementation returns `true` if the HEAD response status code was 2xx.
 
@@ -216,3 +219,4 @@ The [BSD 3-Clause license][bsd].
 [ce]: http://go.pkgdoc.org/github.com/PuerkitoBio/gocrawl#CrawlError
 [gotalk]: http://talks.golang.org/2012/chat.slide#32
 [i10]: https://github.com/PuerkitoBio/gocrawl/issues/10
+[i9]: https://github.com/PuerkitoBio/gocrawl/issues/9

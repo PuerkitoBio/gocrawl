@@ -116,8 +116,10 @@ func (this *EnqueueRedirectError) Error() string {
 	return this.msg
 }
 
-// The HTTP client used by all fetch requests (this is thread-safe)
-var httpClient = &http.Client{CheckRedirect: func(req *http.Request, via []*http.Request) error {
+// The default HTTP client used by DefaultExtender's fetch requests (this is thread-safe).
+// The client's fields can be customized (i.e. for a different redirection strategy, a
+// different Transport object, ...). It should be done prior to starting the crawler.
+var HttpClient = &http.Client{CheckRedirect: func(req *http.Request, via []*http.Request) error {
 	// For robots.txt URLs, allow up to 10 redirects, like the default http client.
 	// Rationale: the site owner explicitly tells us that this specific robots.txt
 	// should be used for this domain.
@@ -205,7 +207,7 @@ func (this *DefaultExtender) Fetch(u *url.URL, userAgent string, headRequest boo
 		return nil, e
 	}
 	req.Header["User-Agent"] = []string{userAgent}
-	return httpClient.Do(req)
+	return HttpClient.Do(req)
 }
 
 // Ask the worker to actually request the URL's body (issue a GET), unless
