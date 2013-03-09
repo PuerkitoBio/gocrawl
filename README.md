@@ -27,6 +27,7 @@ Once this is done, gocrawl may be installed as usual:
 
 ## Changelog
 
+*    **v0.3,2** : Fix the high CPU usage when waiting for a crawl delay.
 *    **v0.3.1** : Export the `HttpClient` variable used by the default `Fetch()` implementation (see [issue #9][i9]).
 *    **v0.3.0** : **BEHAVIOR CHANGE** filter done with normalized URL, fetch done with original, non-normalized URL (see [issue #10][i10]).
 *    **v0.2.0** : **BREAKING CHANGES** rework extension/hooks.

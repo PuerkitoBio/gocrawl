@@ -368,8 +368,10 @@ func (this *Crawler) collectUrls() {
 	for {
 		// BUG : By checking this after each channel reception, there is a bug if the worker
 		// wants to reenqueue following an error or a redirection. The pushPopRefCount
-		// temporarily gets to zero before the new URL is enqueued.
-
+		// temporarily gets to zero before the new URL is enqueued. Check the length
+		// of the enqueue channel to see if this is really over, or just this temporary
+		// state. Ugly, but works until a cleaner refactoring is done (v0.4?).
+		//
 		// Check if refcount is zero - MUST be before the select statement, so that if
 		// no valid seeds are enqueued, the crawler stops.
 		if this.pushPopRefCount == 0 && len(this.enqueue) == 0 {
