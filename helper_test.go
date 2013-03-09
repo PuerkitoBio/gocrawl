@@ -8,6 +8,7 @@ import (
 	"os"
 	"path"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 )
@@ -84,6 +85,7 @@ type spyExtender struct {
 	b            bytes.Buffer
 	// Since EnqueueChan is unaccessible for GoCrawl to set, add it as an explicit field
 	EnqueueChan chan<- *CrawlerCommand
+	m           sync.RWMutex
 }
 
 type callCounter interface {
@@ -92,10 +94,14 @@ type callCounter interface {
 }
 
 func (this *spyExtender) getCallCount(key extensionMethodKey) int64 {
+	this.m.RLock()
+	defer this.m.RUnlock()
 	return this.callCount[key]
 }
 
 func (this *spyExtender) incCallCount(key extensionMethodKey, delta int64) {
+	this.m.Lock()
+	defer this.m.Unlock()
 	this.callCount[key] += delta
 }
 
