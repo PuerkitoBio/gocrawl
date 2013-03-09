@@ -2,6 +2,7 @@ package gocrawl
 
 import (
 	"testing"
+	"time"
 )
 
 func xTestBasicRealHttpRequests(t *testing.T) {
@@ -107,4 +108,15 @@ func TestNoExtender(t *testing.T) {
 	c.Options.CrawlDelay = DefaultTestCrawlDelay
 	c.Options.LogFlags = LogError | LogTrace
 	c.Run()
+}
+
+func TestLongCrawlDelayHighCpu(t *testing.T) {
+	opts := NewOptions(nil)
+	opts.SameHostOnly = true
+	opts.CrawlDelay = 10 * time.Second
+	spy := runFileFetcherWithOptions(opts, []string{"*"}, []string{"http://hosta/page1.html"})
+
+	// TODO : Assert high CPU usage from within the test? Profiling is kind of broken on OSX...
+	assertCallCount(spy, eMKVisit, 3, t)
+	assertCallCount(spy, eMKFilter, 10, t)
 }

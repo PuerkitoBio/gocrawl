@@ -202,6 +202,7 @@ This channel can be useful to arbitrarily enqueue URLs that would otherwise not 
 
 * Richard Penman
 * Dmitry Bondarenko
+* Markus Sonderegger
 
 ## License
 

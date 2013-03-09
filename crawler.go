@@ -5,7 +5,6 @@ import (
 	"github.com/PuerkitoBio/purell"
 	"net/url"
 	"reflect"
-	"runtime"
 	"strings"
 	"sync"
 )
@@ -367,6 +366,18 @@ func (this *Crawler) collectUrls() {
 	}
 
 	for {
+		// BUG : By checking this after each channel reception, there is a bug if the worker
+		// wants to reenqueue following an error or a redirection. The pushPopRefCount
+		// temporarily gets to zero before the new URL is enqueued.
+
+		// Check if refcount is zero - MUST be before the select statement, so that if
+		// no valid seeds are enqueued, the crawler stops.
+		if this.pushPopRefCount == 0 {
+			this.endReason = ErDone
+			stopAll()
+			return
+		}
+
 		select {
 		case res := <-this.push:
 			// Received a response, check if it contains URLs to enqueue
@@ -392,16 +403,6 @@ func (this *Crawler) collectUrls() {
 			// Received a command to enqueue a URL, proceed
 			this.logFunc(LogTrace, "receive url %s", enq.URL.String())
 			this.enqueueUrls([]*url.URL{enq.URL}, nil, enq.Origin)
-
-		default:
-			// Check if refcount is zero
-			if this.pushPopRefCount == 0 {
-				this.endReason = ErDone
-				stopAll()
-				return
-			} else {
-				runtime.Gosched()
-			}
 		}
 	}
 }
