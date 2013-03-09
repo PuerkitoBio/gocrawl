@@ -372,7 +372,7 @@ func (this *Crawler) collectUrls() {
 
 		// Check if refcount is zero - MUST be before the select statement, so that if
 		// no valid seeds are enqueued, the crawler stops.
-		if this.pushPopRefCount == 0 {
+		if this.pushPopRefCount == 0 && len(this.enqueue) == 0 {
 			this.endReason = ErDone
 			stopAll()
 			return
