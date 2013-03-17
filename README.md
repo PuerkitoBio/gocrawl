@@ -19,7 +19,7 @@ gocrawl depends on the following userland libraries:
 *    [purell][]
 *    [robotstxt.go][robots]
 
-Because of its dependency on goquery, **it requires Go's experimental html package to be installed [by following these instructions][exp] prior to the installation of gocrawl (replace the second step with `hg clone -r d9ff34d481bc https://code.google.com/p/go go-exp`, since this is the last revision that compiles with Go1.0.3)**.
+**Until Go1.1 is released, and because of the dependency on GoQuery that, in turns, depends on Go's experimental HTML package, some special steps must be followed to install GoQuery. Follow [these steps][goqinstall] before installing gocrawl.**
 
 Once this is done, gocrawl may be installed as usual:
 
@@ -213,12 +213,12 @@ The [BSD 3-Clause license][bsd].
 [goquery]: https://github.com/PuerkitoBio/goquery
 [robots]: https://github.com/temoto/robotstxt.go
 [purell]: https://github.com/PuerkitoBio/purell
-[exp]: http://code.google.com/p/go-wiki/wiki/InstallingExp
 [robprot]: http://www.robotstxt.org/robotstxt.html
 [robspec]: https://developers.google.com/webmasters/control-crawl-index/docs/robots_txt
-[godoc]: http://go.pkgdoc.org/github.com/PuerkitoBio/gocrawl
-[er]: http://go.pkgdoc.org/github.com/PuerkitoBio/gocrawl#EndReason
-[ce]: http://go.pkgdoc.org/github.com/PuerkitoBio/gocrawl#CrawlError
+[godoc]: http://godoc.org/github.com/PuerkitoBio/gocrawl
+[er]: http://godoc.org/github.com/PuerkitoBio/gocrawl#EndReason
+[ce]: http://godoc.org/github.com/PuerkitoBio/gocrawl#CrawlError
 [gotalk]: http://talks.golang.org/2012/chat.slide#32
 [i10]: https://github.com/PuerkitoBio/gocrawl/issues/10
 [i9]: https://github.com/PuerkitoBio/gocrawl/issues/9
+[goqinstall]: https://github.com/PuerkitoBio/goquery#installation
