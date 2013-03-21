@@ -598,3 +598,57 @@ func TestCircularRedirect(t *testing.T) {
 	assertCallCount(s, eMKEnqueued, 3, t) // Expect 3 Enqueued calls: robots, /pkg (redirects), /pkg/
 	assertCallCount(s, eMKVisited, 1, t)  // Expect 1 visit : /pkg/ (robots don't trigger visited)
 }
+
+// Test issue #13
+func TestSameHostPolicyWithNormalizedSourceUrl(t *testing.T) {
+	spy := newSpyExtenderFunc(eMKVisit, func(res *http.Response, doc *goquery.Document) ([]*url.URL, bool) {
+		if res.Request.URL.Path == "/page1.html" {
+			u, err := res.Request.URL.Parse("page2.html")
+			if err != nil {
+				panic(err)
+			}
+			return []*url.URL{u}, false
+		}
+		return nil, false
+	})
+
+	opts := NewOptions(spy)
+	opts.SameHostOnly = true
+	opts.CrawlDelay = DefaultTestCrawlDelay
+	opts.LogFlags = LogAll
+	c := NewCrawlerWithOptions(opts)
+	c.Run("http://www.hosta/page1.html")
+
+	// Robots don't trigger Filter nor Visit
+	assertCallCount(spy, eMKFilter, 2, t)     // page1, page2
+	assertCallCount(spy, eMKVisit, 2, t)      // page1, page2
+	assertCallCount(spy, eMKDisallowed, 0, t) // No disallowed page
+}
+
+// Test issue #13
+func TestSameHostPolicyRejectWithNormalizedSourceUrl(t *testing.T) {
+	spy := newSpyExtenderFunc(eMKVisit, func(res *http.Response, doc *goquery.Document) ([]*url.URL, bool) {
+		if res.Request.URL.Host == "www.hosta" {
+			u, err := url.Parse("http://www.hostb/page1.html")
+			if err != nil {
+				panic(err)
+			}
+			return []*url.URL{u}, false
+		}
+		return nil, false
+	})
+	spy.useLogBuffer = true
+
+	opts := NewOptions(spy)
+	opts.SameHostOnly = true
+	opts.CrawlDelay = DefaultTestCrawlDelay
+	opts.LogFlags = LogAll
+	c := NewCrawlerWithOptions(opts)
+	c.Run("http://www.hosta/page1.html")
+
+	// Robots don't trigger Filter nor Visit
+	assertCallCount(spy, eMKFilter, 2, t) // hosta/page1, hostb/page1
+	assertCallCount(spy, eMKVisit, 1, t)  // hosta/page1
+	str := "ignore on same host policy: http://hostb/page1.html"
+	assertIsInLog(spy.b, str, t)
+}

@@ -257,6 +257,14 @@ func (this *Crawler) isSameHost(u *url.URL, sourceUrl *url.URL) bool {
 // Enqueue the URLs returned from the worker, as long as it complies with the
 // selection policies.
 func (this *Crawler) enqueueUrls(harvestedUrls []*url.URL, sourceUrl *url.URL, origin EnqueueOrigin) (cnt int) {
+	// COpy and normalize source URL
+	var pnsrcUrl *url.URL
+	if sourceUrl != nil {
+		pnsrcUrl = &url.URL{}
+		*pnsrcUrl = *sourceUrl
+		purell.NormalizeURL(pnsrcUrl, this.Options.URLNormalizationFlags)
+	}
+
 	for _, u := range harvestedUrls {
 		var isVisited, enqueue, head bool
 		var hr HeadRequestMode
@@ -277,7 +285,7 @@ func (this *Crawler) enqueueUrls(harvestedUrls []*url.URL, sourceUrl *url.URL, o
 
 		// Filter the URL - TODO : Priority is ignored at the moment
 		// The normalized URL is used for Filter
-		if enqueue, _, hr = this.Options.Extender.Filter(u, sourceUrl, isVisited, origin); !enqueue {
+		if enqueue, _, hr = this.Options.Extender.Filter(u, pnsrcUrl, isVisited, origin); !enqueue {
 			// Filter said NOT to use this url, so continue with next
 			this.logFunc(LogIgnored, "ignore on filter policy: %s", u.String())
 			continue
@@ -292,7 +300,7 @@ func (this *Crawler) enqueueUrls(harvestedUrls []*url.URL, sourceUrl *url.URL, o
 		} else if !strings.HasPrefix(u.Scheme, "http") { // Again, normalized URL
 			this.logFunc(LogIgnored, "ignore on scheme policy: %s", u.String())
 
-		} else if this.Options.SameHostOnly && !this.isSameHost(u, sourceUrl) { // Again, normalized URL
+		} else if this.Options.SameHostOnly && !this.isSameHost(u, pnsrcUrl) { // Again, normalized URL
 			// Only allow URLs coming from the same host
 			this.logFunc(LogIgnored, "ignore on same host policy: %s", u.String())
 

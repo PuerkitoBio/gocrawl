@@ -61,7 +61,11 @@ func (this *fileFetcherExtender) Fetch(u *url.URL, userAgent string, headRequest
 	req.Header.Add("User-Agent", userAgent)
 
 	// Open the file specified as path in u, relative to testdata/[host]/
-	f, e := os.Open(path.Join(FileFetcherBasePath, u.Host, u.Path))
+	host := u.Host
+	if strings.HasPrefix(host, "www.") {
+		host = host[4:]
+	}
+	f, e := os.Open(path.Join(FileFetcherBasePath, host, u.Path))
 	if e != nil {
 		// Treat errors as 404s - file not found
 		res.Status = "404 Not Found"
