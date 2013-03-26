@@ -9,6 +9,15 @@ import (
 	"sync"
 )
 
+type Context struct {
+	URL                 *url.URL
+	NormalizedURL       *url.URL
+	Origin              EnqueueOrigin
+	SourceURL           *url.URL
+	NormalizedSourceURL *url.URL
+	State               interface{}
+}
+
 // Communication from worker to the master crawler, about the crawling of a URL
 type workerResponse struct {
 	host          string

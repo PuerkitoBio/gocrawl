@@ -46,7 +46,7 @@ const (
 type CrawlError struct {
 	Err  error
 	Kind CrawlErrorKind
-	URL  *url.URL
+	URL  *url.URL // TODO : Context?
 	msg  string
 }
 
@@ -86,22 +86,22 @@ type FetchInfo struct {
 
 // Extension methods required to provide an extender instance.
 type Extender interface {
-	Start([]string) []string
+	Start(map[*url.URL]interface{})
 	End(EndReason)
 	Error(*CrawlError)
 	Log(LogFlags, LogFlags, string)
 
 	ComputeDelay(string, *DelayInfo, *FetchInfo) time.Duration
-	Fetch(*url.URL, string, bool) (*http.Response, error)
-	RequestGet(*http.Response) bool
-	RequestRobots(*url.URL, string) (bool, []byte)
-	FetchedRobots(*http.Response)
+	Fetch(*Context, string, bool) (*http.Response, error)
+	RequestGet(*Context, *http.Response) bool
+	RequestRobots(*Context, string) (bool, []byte)
+	FetchedRobots(*Context, *http.Response)
 
-	Filter(*url.URL, *url.URL, bool, EnqueueOrigin) (bool, int, HeadRequestMode)
-	Enqueued(*url.URL, *url.URL)
-	Visit(*http.Response, *goquery.Document) ([]*url.URL, bool)
-	Visited(*url.URL, []*url.URL)
-	Disallowed(*url.URL)
+	Filter(*Context, bool) (bool, int, HeadRequestMode)
+	Enqueued(*Context)
+	Visit(*Context, *http.Response, *goquery.Document) (map[*url.URL]interface{}, bool)
+	Visited(*Context, []*url.URL)
+	Disallowed(*Context)
 }
 
 // The error type returned when a redirection is requested, so that the
