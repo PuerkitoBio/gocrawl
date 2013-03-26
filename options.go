@@ -34,7 +34,8 @@ type Options struct {
 
 func NewOptions(ext Extender) *Options {
 	// Use defaults except for Extender
-	return &Options{DefaultUserAgent,
+	return &Options{
+		DefaultUserAgent,
 		DefaultRobotUserAgent,
 		0,
 		DefaultEnqueueChanBuffer,
@@ -45,5 +46,6 @@ func NewOptions(ext Extender) *Options {
 		false,
 		DefaultNormalizationFlags,
 		LogError,
-		ext}
+		ext,
+	}
 }
