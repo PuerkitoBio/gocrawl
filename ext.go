@@ -5,68 +5,8 @@ import (
 	"github.com/PuerkitoBio/goquery"
 	"log"
 	"net/http"
-	"net/url"
 	"time"
 )
-
-// Flag indicating why the crawler ended.
-type EndReason uint8
-
-const (
-	ErDone EndReason = iota
-	ErMaxVisits
-	ErError
-)
-
-// Flag indicating the source of the crawl error.
-type CrawlErrorKind uint8
-
-const (
-	CekFetch CrawlErrorKind = iota
-	CekParseRobots
-	CekHttpStatusCode
-	CekReadBody
-	CekParseBody
-	CekParseSeed
-	CekParseNormalizedSeed
-	CekProcessLinks
-	CekParseRedirectUrl
-)
-
-// Flag indicating the head request override mode
-type HeadRequestMode uint8
-
-const (
-	HrmDefault HeadRequestMode = iota
-	HrmRequest
-	HrmIgnore
-)
-
-// Crawl error information.
-type CrawlError struct {
-	Err  error
-	Kind CrawlErrorKind
-	URL  *url.URL // TODO : Context?
-	msg  string
-}
-
-// Implementation of the error interface.
-func (this CrawlError) Error() string {
-	if this.Err != nil {
-		return this.Err.Error()
-	}
-	return this.msg
-}
-
-// Create a new CrawlError based on a source error.
-func newCrawlError(e error, kind CrawlErrorKind, u *url.URL) *CrawlError {
-	return &CrawlError{e, kind, u, ""}
-}
-
-// Create a new CrawlError with the specified message.
-func newCrawlErrorMessage(msg string, kind CrawlErrorKind, u *url.URL) *CrawlError {
-	return &CrawlError{nil, kind, u, msg}
-}
 
 // Delay information: the Options delay, the Robots.txt delay, and the last delay used.
 type DelayInfo struct {
@@ -78,42 +18,42 @@ type DelayInfo struct {
 // Fetch information: the duration of the fetch, the returned status code, whether or
 // not it was a HEAD request, and whether or not it was a robots.txt request.
 type FetchInfo struct {
+	Ctx           *URLContext
 	Duration      time.Duration
 	StatusCode    int
-	HeadRequest   bool
-	RobotsRequest bool
+	HeadRequest   bool // in Ctx? NO! This is to say if this particular fetch was a HEAD request.
+	RobotsRequest bool // In Ctx? (IsRobots)
 }
 
 // Extension methods required to provide an extender instance.
 type Extender interface {
-	Start(map[*url.URL]interface{})
+	// Start, End, Error and Log are not related to a specific URL, so they don't
+	// receive a URLContext struct.
+	Start(interface{}) interface{}
 	End(EndReason)
 	Error(*CrawlError)
 	Log(LogFlags, LogFlags, string)
 
+	// ComputeDelay is related to a Host only, not to a URLContext, although the FetchInfo
+	// is related to a URLContext (holds a ctx field).
 	ComputeDelay(string, *DelayInfo, *FetchInfo) time.Duration
-	Fetch(*Context, string, bool) (*http.Response, error)
-	RequestGet(*Context, *http.Response) bool
-	RequestRobots(*Context, string) (bool, []byte)
-	FetchedRobots(*Context, *http.Response)
 
-	Filter(*Context, bool) (bool, int, HeadRequestMode)
-	Enqueued(*Context)
-	Visit(*Context, *http.Response, *goquery.Document) (map[*url.URL]interface{}, bool)
-	Visited(*Context, []*url.URL)
-	Disallowed(*Context)
-}
+	// All other extender methods are executed in the context of an URL, and thus
+	// receive an URLContext struct as first argument.
+	Fetch(*URLContext, string, bool) (*http.Response, error)
+	RequestGet(*URLContext, *http.Response) bool
+	RequestRobots(*URLContext, string) ([]byte, bool)
+	FetchedRobots(*URLContext, *http.Response)
 
-// The error type returned when a redirection is requested, so that the
-// worker knows that this is not an actual Fetch error, but a request to
-// enqueue the redirect-to URL.
-type EnqueueRedirectError struct {
-	msg string
-}
-
-// Implement the error interface
-func (this *EnqueueRedirectError) Error() string {
-	return this.msg
+	// TODO : Does it make sense to receive the priority here? Or set it on enqueue?
+	// Or it can override it here, but set it on Visit() or when Enqueing via the chan?
+	// Better (?): Set priority in the URLContext, can be changed/set in any call, and
+	// actually used only when enqueing into the crawler enqueue channel. Same for head request mode?
+	Filter(*URLContext, bool) bool
+	Enqueued(*URLContext)
+	Visit(*URLContext, *http.Response, *goquery.Document) (interface{}, bool)
+	Visited(*URLContext, interface{})
+	Disallowed(*URLContext)
 }
 
 // The default HTTP client used by DefaultExtender's fetch requests (this is thread-safe).
@@ -133,7 +73,7 @@ var HttpClient = &http.Client{CheckRedirect: func(req *http.Request, via []*http
 	// For all other URLs, do NOT follow redirections, the default Fetch() implementation
 	// will ask the worker to enqueue the new (redirect-to) URL. Returning an error
 	// will make httpClient.Do() return a url.Error, with the URL field containing the new URL.
-	return &EnqueueRedirectError{"redirection not followed"}
+	return EnqueueRedirectError
 }}
 
 // Default working implementation of an extender.
@@ -143,7 +83,7 @@ type DefaultExtender struct {
 
 // Return the same seeds as those received (those that were passed
 // to Run() initially).
-func (this *DefaultExtender) Start(seeds []string) []string {
+func (this *DefaultExtender) Start(seeds interface{}) interface{} {
 	return seeds
 }
 
@@ -193,7 +133,7 @@ func (this *DefaultExtender) ComputeDelay(host string, di *DelayInfo, lastFetch 
 // while processing the original URL, so that it knows that there is no more
 // redirection HTTP code, and another time when the actual destination URL is
 // fetched to be visited).
-func (this *DefaultExtender) Fetch(u *url.URL, userAgent string, headRequest bool) (*http.Response, error) {
+func (this *DefaultExtender) Fetch(ctx *URLContext, userAgent string, headRequest bool) (*http.Response, error) {
 	var reqType string
 
 	// Prepare the request with the right user agent
@@ -202,43 +142,43 @@ func (this *DefaultExtender) Fetch(u *url.URL, userAgent string, headRequest boo
 	} else {
 		reqType = "GET"
 	}
-	req, e := http.NewRequest(reqType, u.String(), nil)
+	req, e := http.NewRequest(reqType, ctx.URL.String(), nil)
 	if e != nil {
 		return nil, e
 	}
-	req.Header["User-Agent"] = []string{userAgent}
+	req.Header.Set("User-Agent", userAgent)
 	return HttpClient.Do(req)
 }
 
 // Ask the worker to actually request the URL's body (issue a GET), unless
 // the status code is not 2xx.
-func (this *DefaultExtender) RequestGet(headRes *http.Response) bool {
+func (this *DefaultExtender) RequestGet(ctx *URLContext, headRes *http.Response) bool {
 	return headRes.StatusCode >= 200 && headRes.StatusCode < 300
 }
 
 // Ask the worker to actually request (fetch) the Robots.txt document.
-func (this *DefaultExtender) RequestRobots(u *url.URL, robotAgent string) (request bool, data []byte) {
-	return true, nil
+func (this *DefaultExtender) RequestRobots(ctx *URLContext, robotAgent string) (data []byte, doRequest bool) {
+	return nil, true
 }
 
 // FetchedRobots is a no-op.
-func (this *DefaultExtender) FetchedRobots(res *http.Response) {}
+func (this *DefaultExtender) FetchedRobots(ctx *URLContext, res *http.Response) {}
 
 // Enqueue the URL if it hasn't been visited yet.
-func (this *DefaultExtender) Filter(u *url.URL, from *url.URL, isVisited bool, origin EnqueueOrigin) (enqueue bool, priority int, headRequest HeadRequestMode) {
-	return !isVisited, 0, HrmDefault
+func (this *DefaultExtender) Filter(ctx *URLContext, isVisited bool) bool {
+	return !isVisited
 }
 
 // Enqueued is a no-op.
-func (this *DefaultExtender) Enqueued(u *url.URL, from *url.URL) {}
+func (this *DefaultExtender) Enqueued(ctx *URLContext) {}
 
 // Ask the worker to harvest the links in this page.
-func (this *DefaultExtender) Visit(res *http.Response, doc *goquery.Document) (harvested []*url.URL, findLinks bool) {
+func (this *DefaultExtender) Visit(ctx *URLContext, res *http.Response, doc *goquery.Document) (harvested interface{}, findLinks bool) {
 	return nil, true
 }
 
 // Visited is a no-op.
-func (this *DefaultExtender) Visited(u *url.URL, harvested []*url.URL) {}
+func (this *DefaultExtender) Visited(ctx *URLContext, harvested interface{}) {}
 
 // Disallowed is a no-op.
-func (this *DefaultExtender) Disallowed(u *url.URL) {}
+func (this *DefaultExtender) Disallowed(ctx *URLContext) {}

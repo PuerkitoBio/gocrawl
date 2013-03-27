@@ -12,6 +12,8 @@ import (
 	"time"
 )
 
+// TODO : Test Panic in visit, filter, etc.
+
 func TestAllSameHost(t *testing.T) {
 	opts := NewOptions(nil)
 	opts.SameHostOnly = true

@@ -9,15 +9,6 @@ import (
 	"sync"
 )
 
-type Context struct {
-	URL                 *url.URL
-	NormalizedURL       *url.URL
-	Origin              EnqueueOrigin
-	SourceURL           *url.URL
-	NormalizedSourceURL *url.URL
-	State               interface{}
-}
-
 // Communication from worker to the master crawler, about the crawling of a URL
 type workerResponse struct {
 	host          string
@@ -32,18 +23,6 @@ type workerCommand struct {
 	u    *url.URL
 	head bool
 }
-
-// EnqueueOrigin indicates to the crawler and the Filter extender function
-// the origin of this URL.
-type EnqueueOrigin int
-
-const (
-	EoSeed        EnqueueOrigin = iota // Seed URLs have this source
-	EoHarvest                          // URLs harvested from a visit to a page have this source
-	EoRedirect                         // URLs enqueued from a fetch redirection have this source by default
-	EoError                            // URLs enqueued after an error
-	EoCustomStart                      // Custom EnqueueOrigins should start at this value instead of iota
-)
 
 // Communication from extender to crawler about an URL to enqueue
 type CrawlerCommand struct {

@@ -78,17 +78,17 @@ func (this *worker) run() {
 
 			// Got a batch of urls to crawl, loop and check at each iteration if a stop
 			// is received.
-			for _, cmd := range batch {
-				this.logFunc(LogInfo, "popped: %s", cmd.u.String())
+			for _, ctx := range batch {
+				this.logFunc(LogInfo, "popped: %s", ctx.URL.String())
 
-				if isRobotsTxtUrl(cmd.u) {
-					this.requestRobotsTxt(cmd.u)
-				} else if this.isAllowedPerRobotsPolicies(cmd.u) {
-					this.requestUrl(cmd.u, cmd.head)
+				if ctx.IsRobots {
+					this.requestRobotsTxt(ctx.URL)
+				} else if this.isAllowedPerRobotsPolicies(ctx.URL) {
+					this.requestUrl(ctx.URL, ctx.HeadBeforeGet)
 				} else {
 					// Must still notify Crawler that this URL was processed, although not visited
-					this.extender.Disallowed(cmd.u)
-					this.sendResponse(cmd.u, false, nil, false)
+					this.extender.Disallowed(ctx)
+					this.sendResponse(ctx.URL, false, nil, false)
 				}
 
 				// No need to check for idle timeout here, no idling while looping through
