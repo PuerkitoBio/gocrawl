@@ -69,28 +69,44 @@ func (this *Crawler) toURLContexts(raw interface{}, src *url.URL, orig EnqueueOr
 
 	case []string:
 		// Convert all strings to URLContexts
-		res = make([]*URLContext, len(v))
-		for i, s := range v {
+		res = make([]*URLContext, 0, len(v))
+		for _, s := range v {
 			ctx, err := this.stringToURLContext(s, src, orig)
 			if err != nil {
 				// TODO : Log error and ignore URL?
 			}
-			res[i] = ctx
+			res = append(res, ctx)
 		}
 
 	case *url.URL:
 		res = []*URLContext{urlToURLContext(v, src, orig)}
 
 	case []*url.URL:
-		res = make([]*URLContext, len(v))
-		for i, u := range v {
-			res[i] = this.urlToURLContext(u, src, orig)
+		res = make([]*URLContext, 0, len(v))
+		for _, u := range v {
+			res = append(res, this.urlToURLContext(u, src, orig))
 		}
 
-	case S, map[string]interface{}:
+	case map[string]interface{}: // TODO : Idem for type S
+		res = make([]*URLContext, 0, len(v))
+		for s, st := range v {
+			ctx, err := this.stringToURLContext(s, src, orig)
+			if err != nil {
+				// TODO : Log and ignore URL
+			}
+			ctx.State = st
+			res = append(res, ctx)
+		}
 
-	case U, map[*url.URL]interface{}:
+	case map[*url.URL]interface{}: // TODO : Idem for type U
+		res = make([]*URLContext, 0, len(v))
+		for u, st := range v {
+			ctx := this.urlToURLContext(u, src, orig)
+			ctx.State = st
+			res = append(res, ctx)
+		}
 	}
+	return res
 }
 
 func (this *Crawler) stringToURLContext(str string, src *url.URL, orig EnqueueOrigin) (*URLContext, error) {

@@ -18,12 +18,6 @@ type workerResponse struct {
 	idleDeath     bool
 }
 
-// Communication from crawler to worker, about the URL to request
-type workerCommand struct {
-	u    *url.URL
-	head bool
-}
-
 // Communication from extender to crawler about an URL to enqueue
 type CrawlerCommand struct {
 	URL    *url.URL
