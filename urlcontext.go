@@ -55,13 +55,13 @@ func (this *URLContext) GetRobotsURL() (*url.URL, error) {
 	return this.normalizedURL.Parse(robotsTxtPath)
 }
 
-func (this *Crawler) toURLContexts(raw interface{}, src *url.URL, orig EnqueueOrigin) []*URLContext {
+func (this *Crawler) toURLContexts(raw interface{}, src *url.URL) []*URLContext {
 	var res []*URLContext
 
 	switch v := raw.(type) {
 	case string:
 		// Convert a single string URL to an URLContext
-		ctx, err := stringToURLContext(v, src, orig)
+		ctx, err := stringToURLContext(v, src)
 		if err != nil {
 			// TODO : Log error and ignore URL?
 		}
@@ -71,7 +71,7 @@ func (this *Crawler) toURLContexts(raw interface{}, src *url.URL, orig EnqueueOr
 		// Convert all strings to URLContexts
 		res = make([]*URLContext, 0, len(v))
 		for _, s := range v {
-			ctx, err := this.stringToURLContext(s, src, orig)
+			ctx, err := this.stringToURLContext(s, src)
 			if err != nil {
 				// TODO : Log error and ignore URL?
 			}
@@ -79,18 +79,18 @@ func (this *Crawler) toURLContexts(raw interface{}, src *url.URL, orig EnqueueOr
 		}
 
 	case *url.URL:
-		res = []*URLContext{urlToURLContext(v, src, orig)}
+		res = []*URLContext{urlToURLContext(v, src)}
 
 	case []*url.URL:
 		res = make([]*URLContext, 0, len(v))
 		for _, u := range v {
-			res = append(res, this.urlToURLContext(u, src, orig))
+			res = append(res, this.urlToURLContext(u, src))
 		}
 
 	case map[string]interface{}: // TODO : Idem for type S
 		res = make([]*URLContext, 0, len(v))
 		for s, st := range v {
-			ctx, err := this.stringToURLContext(s, src, orig)
+			ctx, err := this.stringToURLContext(s, src)
 			if err != nil {
 				// TODO : Log and ignore URL
 			}
@@ -101,7 +101,7 @@ func (this *Crawler) toURLContexts(raw interface{}, src *url.URL, orig EnqueueOr
 	case map[*url.URL]interface{}: // TODO : Idem for type U
 		res = make([]*URLContext, 0, len(v))
 		for u, st := range v {
-			ctx := this.urlToURLContext(u, src, orig)
+			ctx := this.urlToURLContext(u, src)
 			ctx.State = st
 			res = append(res, ctx)
 		}
@@ -109,15 +109,15 @@ func (this *Crawler) toURLContexts(raw interface{}, src *url.URL, orig EnqueueOr
 	return res
 }
 
-func (this *Crawler) stringToURLContext(str string, src *url.URL, orig EnqueueOrigin) (*URLContext, error) {
+func (this *Crawler) stringToURLContext(str string, src *url.URL) (*URLContext, error) {
 	u, err := url.Parse(str)
 	if err != nil {
 		return err
 	}
-	return this.urlToURLContext(u, src, orig), nil
+	return this.urlToURLContext(u, src), nil
 }
 
-func (this *Crawler) urlToURLContext(u, src *url.URL, orig EnqueueOrigin) *URLContext {
+func (this *Crawler) urlToURLContext(u, src *url.URL) *URLContext {
 	rawU := *u
 	purell.NormalizeURL(u, this.Options.URLNormalizationFlags)
 	rawSrc := *src
@@ -128,7 +128,6 @@ func (this *Crawler) urlToURLContext(u, src *url.URL, orig EnqueueOrigin) *URLCo
 		nil,
 		&rawU,
 		u,
-		orig,
 		rawSrc,
 		src,
 	}

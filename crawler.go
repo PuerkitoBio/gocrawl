@@ -11,17 +11,11 @@ import (
 
 // Communication from worker to the master crawler, about the crawling of a URL
 type workerResponse struct {
-	host          string
+	ctx           *URLContext
 	visited       bool
-	sourceUrl     *url.URL
 	harvestedUrls []*url.URL
+	host          string
 	idleDeath     bool
-}
-
-// Communication from extender to crawler about an URL to enqueue
-type CrawlerCommand struct {
-	URL    *url.URL
-	Origin EnqueueOrigin
 }
 
 // The crawler itself, the master of the whole process
@@ -31,7 +25,7 @@ type Crawler struct {
 	// Internal fields
 	logFunc   func(LogFlags, string, ...interface{})
 	push      chan *workerResponse
-	enqueue   chan *CrawlerCommand
+	enqueue   chan interface{}
 	wg        *sync.WaitGroup
 	endReason EndReason
 
@@ -59,8 +53,9 @@ func NewCrawler(ext Extender) *Crawler {
 // Run starts the crawling process, based on the given seeds and the current
 // Options settings. Execution stops either when MaxVisits is reached (if specified)
 // or when no more URLs need visiting.
-func (this *Crawler) Run(seeds ...string) EndReason {
+func (this *Crawler) Run(seeds interface{}) EndReason {
 	seeds = this.Options.Extender.Start(seeds)
+	// TODO : this.toURLContexts(seeds, nil)
 	parsedSeeds := this.init(seeds)
 
 	// Start with the seeds, and loop till death
