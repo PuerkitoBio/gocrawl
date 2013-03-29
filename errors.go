@@ -16,7 +16,11 @@ var (
 	// The error returned when a redirection is requested, so that the
 	// worker knows that this is not an actual Fetch error, but a request to
 	// enqueue the redirect-to URL.
-	EnqueueRedirectError = errors.New("redirection not followed")
+	ErrEnqueueRedirect = errors.New("redirection not followed")
+
+	// The error returned when the maximum number of visits, as specified by the
+	// Options field MaxVisits, is reached.
+	ErrMaxVisits = errors.New("the maximum number of visits is reached")
 )
 
 // Implementation of the error interface.

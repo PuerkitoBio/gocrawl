@@ -20,30 +20,24 @@ type worker struct {
 	host  string
 	index int
 
-	// User-agent strings
-	userAgent      string
-	robotUserAgent string
-
 	// Communication channels and sync
 	push    chan<- *workerResponse
 	pop     popChannel
-	stop    chan bool
+	stop    chan struct{}
+	enqueue chan<- interface{}
 	wg      *sync.WaitGroup
-	wait    <-chan time.Time
-	enqueue chan<- *CrawlerCommand
 
-	// Config
-	crawlDelay  time.Duration
-	idleTTL     time.Duration
+	// Robots validation
 	robotsGroup *robotstxt.Group
 
-	// Callbacks
-	extender Extender
-	logFunc  func(LogFlags, string, ...interface{})
+	// Logging
+	logFunc func(LogFlags, string, ...interface{})
 
 	// Implementation fields
+	wait           <-chan time.Time
 	lastFetch      *FetchInfo
 	lastCrawlDelay time.Duration
+	opts           *Options
 }
 
 // Start crawling the host.
@@ -227,11 +221,11 @@ func (this *worker) fetchUrl(u *url.URL, agent string, headRequest bool) (res *h
 
 		// Request the URL
 		if res, e = this.extender.Fetch(u, agent, headRequest); e != nil {
-			// Check if this is an EnqueueRedirectError, in which case we will enqueue
+			// Check if this is an ErrEnqueueRedirect, in which case we will enqueue
 			// the redirect-to URL.
 			if ue, y := e.(*url.Error); y {
-				// We have a *url.Error, check if it was returned because of an EnqueueRedirectError
-				if _, y = ue.Err.(*EnqueueRedirectError); y {
+				// We have a *url.Error, check if it was returned because of an ErrEnqueueRedirect
+				if ue.Err == ErrEnqueueRedirect {
 					// Do not notify this error outside of this if block, this is not a
 					// "real" error. We either enqueue the new URL, or fail to parse it,
 					// and then stop processing the current URL.

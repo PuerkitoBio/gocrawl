@@ -30,7 +30,7 @@ type Extender interface {
 	// Start, End, Error and Log are not related to a specific URL, so they don't
 	// receive a URLContext struct.
 	Start(interface{}) interface{}
-	End(EndReason)
+	End(error)
 	Error(*CrawlError)
 	Log(LogFlags, LogFlags, string)
 
@@ -73,12 +73,12 @@ var HttpClient = &http.Client{CheckRedirect: func(req *http.Request, via []*http
 	// For all other URLs, do NOT follow redirections, the default Fetch() implementation
 	// will ask the worker to enqueue the new (redirect-to) URL. Returning an error
 	// will make httpClient.Do() return a url.Error, with the URL field containing the new URL.
-	return EnqueueRedirectError
+	return ErrEnqueueRedirect
 }}
 
 // Default working implementation of an extender.
 type DefaultExtender struct {
-	EnqueueChan chan<- *CrawlerCommand
+	EnqueueChan chan<- interface{}
 }
 
 // Return the same seeds as those received (those that were passed
@@ -88,7 +88,7 @@ func (this *DefaultExtender) Start(seeds interface{}) interface{} {
 }
 
 // End is a no-op.
-func (this *DefaultExtender) End(reason EndReason) {}
+func (this *DefaultExtender) End(err error) {}
 
 // Error is a no-op (logging is done automatically, regardless of the implementation
 // of the Error() hook).

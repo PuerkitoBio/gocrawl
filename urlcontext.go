@@ -19,7 +19,6 @@ type URLContext struct {
 	// Internal fields, available through getters
 	url                 *url.URL
 	normalizedURL       *url.URL
-	origin              EnqueueOrigin
 	sourceURL           *url.URL
 	normalizedSourceURL *url.URL
 }
@@ -32,10 +31,6 @@ func (this *URLContext) NormalizedURL() *url.URL {
 	return this.normalizedURL
 }
 
-func (this *URLContext) Origin() EnqueueOrigin {
-	return this.origin
-}
-
 func (this *URLContext) SourceURL() *url.URL {
 	return this.sourceURL
 }
@@ -44,15 +39,26 @@ func (this *URLContext) NormalizedSourceURL() *url.URL {
 	return this.normalizedSourceURL
 }
 
-func (this *URLContext) IsRobotsURL() {
+func (this *URLContext) IsRobotsURL() bool {
 	if this.normalizedURL == nil {
 		return false
 	}
 	return this.normalizedURL.Path == robotsTxtPath
 }
 
-func (this *URLContext) GetRobotsURL() (*url.URL, error) {
-	return this.normalizedURL.Parse(robotsTxtPath)
+func (this *URLContext) GetRobotsURLCtx() (*URLContext, error) {
+	robUrl, err := this.normalizedURL.Parse(robotsTxtPath)
+	if err != nil {
+		return nil, err
+	}
+	return &URLContext{
+		false, // Never request HEAD before GET for robots.txt
+		nil,   // Always nil state
+		robUrl,
+		robUrl,         // Normalized is same as raw
+		this.sourceURL, // Source and normalized source is same as for current context
+		this.normalizedSourceURL,
+	}, nil
 }
 
 func (this *Crawler) toURLContexts(raw interface{}, src *url.URL) []*URLContext {
@@ -63,9 +69,11 @@ func (this *Crawler) toURLContexts(raw interface{}, src *url.URL) []*URLContext 
 		// Convert a single string URL to an URLContext
 		ctx, err := stringToURLContext(v, src)
 		if err != nil {
-			// TODO : Log error and ignore URL?
+			this.Options.Extender.Error(newCrawlError(e, CekParseSeed, nil))
+			this.logFunc(LogError, "ERROR parsing seed %s", s)
+		} else {
+			res = []*URLContext{ctx}
 		}
-		res = []*URLContext{ctx}
 
 	case []string:
 		// Convert all strings to URLContexts
@@ -73,9 +81,11 @@ func (this *Crawler) toURLContexts(raw interface{}, src *url.URL) []*URLContext 
 		for _, s := range v {
 			ctx, err := this.stringToURLContext(s, src)
 			if err != nil {
-				// TODO : Log error and ignore URL?
+				this.Options.Extender.Error(newCrawlError(e, CekParseSeed, nil))
+				this.logFunc(LogError, "ERROR parsing seed %s", s)
+			} else {
+				res = append(res, ctx)
 			}
-			res = append(res, ctx)
 		}
 
 	case *url.URL:
@@ -92,10 +102,12 @@ func (this *Crawler) toURLContexts(raw interface{}, src *url.URL) []*URLContext 
 		for s, st := range v {
 			ctx, err := this.stringToURLContext(s, src)
 			if err != nil {
-				// TODO : Log and ignore URL
+				this.Options.Extender.Error(newCrawlError(e, CekParseSeed, nil))
+				this.logFunc(LogError, "ERROR parsing seed %s", s)
+			} else {
+				ctx.State = st
+				res = append(res, ctx)
 			}
-			ctx.State = st
-			res = append(res, ctx)
 		}
 
 	case map[*url.URL]interface{}: // TODO : Idem for type U
