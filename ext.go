@@ -136,7 +136,7 @@ func (this *DefaultExtender) Fetch(ctx *URLContext, userAgent string, headReques
 	} else {
 		reqType = "GET"
 	}
-	req, e := http.NewRequest(reqType, ctx.URL.String(), nil)
+	req, e := http.NewRequest(reqType, ctx.url.String(), nil)
 	if e != nil {
 		return nil, e
 	}

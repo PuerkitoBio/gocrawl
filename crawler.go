@@ -11,7 +11,7 @@ import (
 type workerResponse struct {
 	ctx           *URLContext
 	visited       bool
-	harvestedUrls interface{}
+	harvestedURLs interface{}
 	host          string
 	idleDeath     bool
 }
@@ -220,7 +220,7 @@ func (this *Crawler) enqueueUrls(ctxs []*URLContext) (cnt int) {
 
 		} else if this.Options.SameHostOnly && !this.isSameHost(ctx) {
 			// Only allow URLs coming from the same host
-			this.logFunc(LogIgnored, "ignore on same host policy: %s", u)
+			this.logFunc(LogIgnored, "ignore on same host policy: %s", ctx.normalizedURL)
 
 		} else {
 			// All is good, visit this URL (robots.txt verification is done by worker)
@@ -239,7 +239,7 @@ func (this *Crawler) enqueueUrls(ctxs []*URLContext) (cnt int) {
 				w = this.launchWorker(ctx)
 				// Automatically enqueue the robots.txt URL as first in line
 				if robCtx, e := ctx.GetRobotsURLCtx(); e != nil {
-					this.Options.Extender.Error(newCrawlError(e, CekParseRobots, u))
+					this.Options.Extender.Error(newCrawlError(ctx, e, CekParseRobots))
 					this.logFunc(LogError, "ERROR parsing robots.txt from %s: %s", ctx.normalizedURL, e)
 				} else {
 					this.logFunc(LogEnqueued, "enqueue: %s", robCtx.url)
@@ -300,7 +300,7 @@ func (this *Crawler) collectUrls() error {
 					// Limit reached, request workers to stop
 					this.logFunc(LogInfo, "sending STOP signals...")
 					close(this.stop)
-					return ErMaxVisits
+					return ErrMaxVisits
 				}
 			}
 			if res.idleDeath {
@@ -314,8 +314,9 @@ func (this *Crawler) collectUrls() error {
 
 		case enq := <-this.enqueue:
 			// Received a command to enqueue a URL, proceed
-			this.logFunc(LogTrace, "receive url(s) to enqueue %v", enq.URLs)
-			this.enqueueUrls(this.toURLContexts(enq.harvestedURLs, nil))
+			ctxs := this.toURLContexts(enq, nil)
+			this.logFunc(LogTrace, "receive url(s) to enqueue %v", ctxs)
+			this.enqueueUrls(ctxs)
 		}
 	}
 }
