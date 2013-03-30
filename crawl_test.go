@@ -12,6 +12,45 @@ import (
 	"time"
 )
 
+// Type a is a simple syntax helper to create test cases' asserts.
+type a map[extensionMethodKey]int
+
+// Test case structure.
+type testCase struct {
+	name    string
+	opts    *Options
+	seeds   interface{}
+	asserts a
+}
+
+var (
+	// Actual definition of test cases.
+	cases = [...]testCase{
+		testCase{
+			"AllSameHost",
+			&Options{
+				SameHostOnly: true,
+				CrawlDelay:   DefaultTestCrawlDelay,
+				LogFlags:     LogAll,
+			},
+			[]string{
+				"http://hosta/page1.html",
+				"http://hosta/page4.html",
+			},
+			a{
+				eMKVisit:  5,
+				eMKFilter: 13,
+			},
+		},
+	}
+)
+
+func TestRunner(t *testing.T) {
+
+}
+
+func runTestCase(tc *testCase)
+
 // TODO : Test Panic in visit, filter, etc.
 
 func TestAllSameHost(t *testing.T) {
