@@ -3,6 +3,7 @@ package gocrawl
 import (
 	"github.com/PuerkitoBio/purell"
 	"net/url"
+	"strings"
 )
 
 const (
@@ -40,10 +41,16 @@ func (this *URLContext) NormalizedSourceURL() *url.URL {
 }
 
 func (this *URLContext) IsRobotsURL() bool {
-	if this.normalizedURL == nil {
+	return isRobotsURL(this.normalizedURL)
+}
+
+// Implement in a private func, because called from HttpClient also (without
+// an URLContext).
+func isRobotsURL(u *url.URL) bool {
+	if u == nil {
 		return false
 	}
-	return this.normalizedURL.Path == robotsTxtPath
+	return strings.ToLower(u.Path) == robotsTxtPath
 }
 
 func (this *URLContext) GetRobotsURLCtx() (*URLContext, error) {

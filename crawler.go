@@ -21,19 +21,19 @@ type Crawler struct {
 	Options *Options
 
 	// Internal fields
-	logFunc func(LogFlags, string, ...interface{})
-	push    chan *workerResponse
-	enqueue chan interface{}
-	stop    chan struct{}
-	wg      *sync.WaitGroup
-
-	// keep visited URLs in map, O(1) access time vs O(n) for slice. The empty struct value
-	// is of no use, but this is the smallest type possible - it uses no memory at all.
-	visited         map[string]struct{}
+	logFunc         func(LogFlags, string, ...interface{})
+	push            chan *workerResponse
+	enqueue         chan interface{}
+	stop            chan struct{}
+	wg              *sync.WaitGroup
 	pushPopRefCount int
 	visits          int
-	workers         map[string]*worker
-	hosts           []string
+
+	// keep lookups in maps, O(1) access time vs O(n) for slice. The empty struct value
+	// is of no use, but this is the smallest type possible - it uses no memory at all.
+	visited map[string]struct{}
+	hosts   map[string]struct{}
+	workers map[string]*worker
 }
 
 // Crawler constructor with a pre-initialized Options object.
@@ -70,12 +70,12 @@ func (this *Crawler) init(ctxs []*URLContext) {
 	// Helper log function, takes care of filtering based on level
 	this.logFunc = getLogFunc(this.Options.Extender, this.Options.LogFlags, -1)
 
-	// Initialize the internal hosts slice
-	this.hosts = make([]string, 0, len(ctxs))
+	// Initialize the internal hosts map
+	this.hosts = make(map[string]struct{}, len(ctxs))
 	for _, ctx := range ctxs {
 		// Add this normalized URL's host if it is not already there.
-		if indexInStrings(this.hosts, ctx.normalizedURL.Host) == -1 {
-			this.hosts = append(this.hosts, ctx.normalizedURL.Host)
+		if _, ok := this.hosts[ctx.normalizedURL.Host]; !ok {
+			this.hosts[ctx.normalizedURL.Host] = struct{}{}
 		}
 	}
 
@@ -184,7 +184,8 @@ func (this *Crawler) isSameHost(ctx *URLContext) bool {
 	}
 
 	// Otherwise, check if the URL is from one of the seed hosts
-	return indexInStrings(this.hosts, ctx.normalizedURL.Host) != -1
+	_, ok := this.hosts[ctx.normalizedURL.Host]
+	return ok
 }
 
 // Enqueue the URLs returned from the worker, as long as it complies with the

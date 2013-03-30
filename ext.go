@@ -21,8 +21,7 @@ type FetchInfo struct {
 	Ctx           *URLContext
 	Duration      time.Duration
 	StatusCode    int
-	HeadRequest   bool // in Ctx? NO! This is to say if this particular fetch was a HEAD request.
-	RobotsRequest bool // In Ctx? (IsRobots)
+	IsHeadRequest bool
 }
 
 // Extension methods required to provide an extender instance.
@@ -44,11 +43,6 @@ type Extender interface {
 	RequestGet(*URLContext, *http.Response) bool
 	RequestRobots(*URLContext, string) ([]byte, bool)
 	FetchedRobots(*URLContext, *http.Response)
-
-	// TODO : Does it make sense to receive the priority here? Or set it on enqueue?
-	// Or it can override it here, but set it on Visit() or when Enqueing via the chan?
-	// Better (?): Set priority in the URLContext, can be changed/set in any call, and
-	// actually used only when enqueing into the crawler enqueue channel. Same for head request mode?
 	Filter(*URLContext, bool) bool
 	Enqueued(*URLContext)
 	Visit(*URLContext, *http.Response, *goquery.Document) (interface{}, bool)
@@ -63,7 +57,7 @@ var HttpClient = &http.Client{CheckRedirect: func(req *http.Request, via []*http
 	// For robots.txt URLs, allow up to 10 redirects, like the default http client.
 	// Rationale: the site owner explicitly tells us that this specific robots.txt
 	// should be used for this domain.
-	if isRobotsTxtUrl(req.URL) {
+	if isRobotsURL(req.URL) {
 		if len(via) >= 10 {
 			return errors.New("stopped after 10 redirects")
 		}

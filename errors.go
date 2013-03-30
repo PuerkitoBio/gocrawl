@@ -4,14 +4,6 @@ import (
 	"errors"
 )
 
-// Crawl error information.
-type CrawlError struct {
-	Ctx  *URLContext
-	Err  error
-	Kind CrawlErrorKind
-	msg  string
-}
-
 var (
 	// The error returned when a redirection is requested, so that the
 	// worker knows that this is not an actual Fetch error, but a request to
@@ -22,6 +14,14 @@ var (
 	// Options field MaxVisits, is reached.
 	ErrMaxVisits = errors.New("the maximum number of visits is reached")
 )
+
+// Crawl error information.
+type CrawlError struct {
+	Ctx  *URLContext
+	Err  error
+	Kind CrawlErrorKind
+	msg  string
+}
 
 // Implementation of the error interface.
 func (this CrawlError) Error() string {
