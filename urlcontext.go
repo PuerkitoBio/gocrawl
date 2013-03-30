@@ -131,7 +131,7 @@ func (this *Crawler) toURLContexts(raw interface{}, src *url.URL) []*URLContext 
 func (this *Crawler) stringToURLContext(str string, src *url.URL) (*URLContext, error) {
 	u, err := url.Parse(str)
 	if err != nil {
-		return err
+		return nil, err
 	}
 	return this.urlToURLContext(u, src), nil
 }
@@ -147,7 +147,7 @@ func (this *Crawler) urlToURLContext(u, src *url.URL) *URLContext {
 		nil,
 		&rawU,
 		u,
-		rawSrc,
+		&rawSrc,
 		src,
 	}
 }

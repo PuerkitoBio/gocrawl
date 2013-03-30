@@ -319,4 +319,5 @@ func (this *Crawler) collectUrls() error {
 			this.enqueueUrls(ctxs)
 		}
 	}
+	panic("unreachable")
 }
