@@ -105,6 +105,37 @@ var (
 				"worker for host hostunknown cleared on idle policy\n",
 			},
 		},
+
+		&testCase{
+			name: "EnqueuedCount",
+			opts: &Options{
+				SameHostOnly: true,
+				CrawlDelay:   DefaultTestCrawlDelay,
+				LogFlags:     LogAll,
+			},
+			seeds: []string{
+				"http://robota/page1.html",
+			},
+			asserts: a{
+				eMKEnqueued: 2, // page1 and robots.txt (did not visit page1, so page2 never found)
+				eMKVisit:    0, // No visit per robots policy
+			},
+		},
+
+		&testCase{
+			name: "VisitedCount",
+			opts: &Options{
+				SameHostOnly: true,
+				CrawlDelay:   DefaultTestCrawlDelay,
+				LogFlags:     LogAll,
+			},
+			seeds: []string{
+				"http://hosta/page1.html",
+			},
+			asserts: a{
+				eMKVisited: 3,
+			},
+		},
 	}
 )
 
@@ -173,62 +204,6 @@ func runTestCase(t *testing.T, tc *testCase) {
 // TODO : Test Panic in visit, filter, etc.
 // TODO : Test state with URL, various types supported as interface{} for seeds and harvested
 /*
-func TestIdleTimeOut(t *testing.T) {
-	opts := NewOptions(nil)
-	opts.SameHostOnly = false
-	opts.WorkerIdleTTL = 50 * time.Millisecond
-	opts.CrawlDelay = DefaultTestCrawlDelay
-	opts.LogFlags = LogInfo
-	spy := runFileFetcherWithOptions(opts,
-		[]string{"*"},
-		[]string{"http://hosta/page1.html", "http://hosta/page4.html", "http://hostb/pageunlinked.html"})
-
-	assertIsInLog(spy.b, "worker for host hostd cleared on idle policy\n", t)
-	assertIsInLog(spy.b, "worker for host hostunknown cleared on idle policy\n", t)
-}
-
-func TestReadBodyInVisitor(t *testing.T) {
-	var err error
-	var b []byte
-
-	spy := newSpyExtenderFunc(eMKVisit, func(res *http.Response, doc *goquery.Document) ([]*url.URL, bool) {
-		b, err = ioutil.ReadAll(res.Body)
-		return nil, false
-	})
-
-	c := NewCrawler(spy)
-	c.Options.CrawlDelay = DefaultTestCrawlDelay
-	c.Options.LogFlags = LogAll
-	c.Run("http://hostc/page3.html")
-
-	if err != nil {
-		t.Error(err)
-	} else if len(b) == 0 {
-		t.Error("Empty body")
-	}
-}
-
-func TestEnqueuedCount(t *testing.T) {
-	opts := NewOptions(nil)
-	opts.SameHostOnly = true
-	opts.CrawlDelay = DefaultTestCrawlDelay
-	spy := runFileFetcherWithOptions(opts, []string{"*"}, []string{"http://robota/page1.html"})
-
-	// page1 and robots.txt (did not visit page1, so page2 never found)
-	assertCallCount(spy, eMKEnqueued, 2, t)
-	// No visit per robots policy
-	assertCallCount(spy, eMKVisit, 0, t)
-}
-
-func TestVisitedCount(t *testing.T) {
-	opts := NewOptions(nil)
-	opts.SameHostOnly = true
-	opts.CrawlDelay = DefaultTestCrawlDelay
-	spy := runFileFetcherWithOptions(opts, []string{"*"}, []string{"http://hosta/page1.html"})
-
-	assertCallCount(spy, eMKVisited, 3, t)
-}
-
 func TestStartExtender(t *testing.T) {
 	spy := newSpyExtenderFunc(eMKStart, func(seeds []string) []string {
 		return append(seeds, "http://hostb/page1.html")
@@ -776,5 +751,25 @@ func TestRunTwiceSameInstance(t *testing.T) {
 
 	assertCallCount(spy, eMKVisit, 3, t)
 	assertCallCount(spy, eMKFilter, 11, t)
+}
+func TestReadBodyInVisitor(t *testing.T) {
+	var err error
+	var b []byte
+
+	spy := newSpyExtenderFunc(eMKVisit, func(res *http.Response, doc *goquery.Document) ([]*url.URL, bool) {
+		b, err = ioutil.ReadAll(res.Body)
+		return nil, false
+	})
+
+	c := NewCrawler(spy)
+	c.Options.CrawlDelay = DefaultTestCrawlDelay
+	c.Options.LogFlags = LogAll
+	c.Run("http://hostc/page3.html")
+
+	if err != nil {
+		t.Error(err)
+	} else if len(b) == 0 {
+		t.Error("Empty body")
+	}
 }
 */
