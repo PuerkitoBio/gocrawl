@@ -136,6 +136,72 @@ var (
 				eMKVisited: 3,
 			},
 		},
+
+		&testCase{
+			name: "StartExtender",
+			opts: &Options{
+				SameHostOnly: true,
+				CrawlDelay:   DefaultTestCrawlDelay,
+				LogFlags:     LogAll,
+			},
+			seeds: []string{
+				"http://hostc/page1.html",
+			},
+			funcs: f{
+				eMKStart: func(seeds interface{}) interface{} {
+					ar := seeds.([]string)
+					return append(ar, "http://hostb/page1.html")
+				},
+			},
+			asserts: a{
+				eMKStart:    1,
+				eMKVisit:    4,
+				eMKEnqueued: 7, // Page1-2 for both, robots a-b, page unknown
+			},
+		},
+
+		&testCase{
+			name: "!EndErrMaxVisits",
+			opts: &Options{
+				SameHostOnly: true,
+				CrawlDelay:   DefaultTestCrawlDelay,
+				MaxVisits:    1,
+				LogFlags:     LogAll,
+			},
+			seeds: []string{
+				"http://hosta/page1.html",
+			},
+			// TODO : Implement a "called with args" mock-type feature
+			asserts: a{
+				eMKStart:    1,
+				eMKVisit:    4,
+				eMKEnqueued: 7, // Page1-2 for both, robots a-b, page unknown
+			},
+		},
+
+		&testCase{
+			name: "ComputeDelay",
+			opts: &Options{
+				SameHostOnly: true,
+				CrawlDelay:   DefaultTestCrawlDelay,
+				MaxVisits:    2,
+				LogFlags:     LogError | LogInfo,
+			},
+			seeds: []string{
+				"http://hosta/page1.html",
+			},
+			funcs: f{
+				eMKComputeDelay: func(host string, di *DelayInfo, lf *FetchInfo) time.Duration {
+					return 17 * time.Millisecond
+				},
+			},
+			asserts: a{
+				eMKComputeDelay: 3,
+			},
+			logAsserts: []string{
+				"using crawl-delay: 17ms\n",
+			},
+		},
 	}
 )
 
@@ -204,77 +270,6 @@ func runTestCase(t *testing.T, tc *testCase) {
 // TODO : Test Panic in visit, filter, etc.
 // TODO : Test state with URL, various types supported as interface{} for seeds and harvested
 /*
-func TestStartExtender(t *testing.T) {
-	spy := newSpyExtenderFunc(eMKStart, func(seeds []string) []string {
-		return append(seeds, "http://hostb/page1.html")
-	})
-	opts := NewOptions(spy)
-	opts.SameHostOnly = true
-	opts.CrawlDelay = DefaultTestCrawlDelay
-	c := NewCrawlerWithOptions(opts)
-	c.Run("http://hostc/page1.html")
-
-	assertCallCount(spy, eMKStart, 1, t)
-	assertCallCount(spy, eMKVisit, 4, t)
-	// Page1-2 for both, robots a-b, page unknown
-	assertCallCount(spy, eMKEnqueued, 7, t)
-}
-
-func TestEndReasonMaxVisits(t *testing.T) {
-	var e EndReason
-
-	spy := newSpyExtenderFunc(eMKEnd, func(end EndReason) {
-		e = end
-	})
-	opts := NewOptions(spy)
-	opts.SameHostOnly = true
-	opts.CrawlDelay = DefaultTestCrawlDelay
-	opts.MaxVisits = 1
-	c := NewCrawlerWithOptions(opts)
-	c.Run("http://hosta/page1.html")
-
-	assertCallCount(spy, eMKEnd, 1, t)
-	if e != ErMaxVisits {
-		t.Fatalf("Expected end reason MaxVisits, got %v\n", e)
-	}
-}
-
-func TestEndReasonDone(t *testing.T) {
-	var e EndReason
-
-	spy := newSpyExtenderFunc(eMKEnd, func(end EndReason) {
-		e = end
-	})
-	opts := NewOptions(spy)
-	opts.SameHostOnly = true
-	opts.CrawlDelay = DefaultTestCrawlDelay
-	c := NewCrawlerWithOptions(opts)
-	c.Run("http://hosta/page5.html")
-
-	assertCallCount(spy, eMKEnd, 1, t)
-	if e != ErDone {
-		t.Fatalf("Expected end reason Done, got %v\n", e)
-	}
-}
-
-func TestErrorFetch(t *testing.T) {
-	var e *CrawlError
-
-	spy := newSpyExtenderFunc(eMKError, func(err *CrawlError) {
-		e = err
-	})
-	opts := NewOptions(spy)
-	opts.SameHostOnly = true
-	opts.CrawlDelay = DefaultTestCrawlDelay
-	c := NewCrawlerWithOptions(opts)
-	c.Run("http://hostb/page1.html")
-
-	assertCallCount(spy, eMKError, 1, t)
-	if e.Kind != CekFetch {
-		t.Fatalf("Expected error kind Fetch, got %v\n", e.Kind)
-	}
-}
-
 func TestComputeDelay(t *testing.T) {
 	spy := newSpyExtenderFunc(eMKComputeDelay, func(host string, di *DelayInfo, lastFetch *FetchInfo) time.Duration {
 		return 17 * time.Millisecond
@@ -770,6 +765,58 @@ func TestReadBodyInVisitor(t *testing.T) {
 		t.Error(err)
 	} else if len(b) == 0 {
 		t.Error("Empty body")
+	}
+}
+func TestEndReasonMaxVisits(t *testing.T) {
+	var e EndReason
+
+	spy := newSpyExtenderFunc(eMKEnd, func(end EndReason) {
+		e = end
+	})
+	opts := NewOptions(spy)
+	opts.SameHostOnly = true
+	opts.CrawlDelay = DefaultTestCrawlDelay
+	opts.MaxVisits = 1
+	c := NewCrawlerWithOptions(opts)
+	c.Run("http://hosta/page1.html")
+
+	assertCallCount(spy, eMKEnd, 1, t)
+	if e != ErMaxVisits {
+		t.Fatalf("Expected end reason MaxVisits, got %v\n", e)
+	}
+}
+func TestEndReasonDone(t *testing.T) {
+	var e EndReason
+
+	spy := newSpyExtenderFunc(eMKEnd, func(end EndReason) {
+		e = end
+	})
+	opts := NewOptions(spy)
+	opts.SameHostOnly = true
+	opts.CrawlDelay = DefaultTestCrawlDelay
+	c := NewCrawlerWithOptions(opts)
+	c.Run("http://hosta/page5.html")
+
+	assertCallCount(spy, eMKEnd, 1, t)
+	if e != ErDone {
+		t.Fatalf("Expected end reason Done, got %v\n", e)
+	}
+}
+func TestErrorFetch(t *testing.T) {
+	var e *CrawlError
+
+	spy := newSpyExtenderFunc(eMKError, func(err *CrawlError) {
+		e = err
+	})
+	opts := NewOptions(spy)
+	opts.SameHostOnly = true
+	opts.CrawlDelay = DefaultTestCrawlDelay
+	c := NewCrawlerWithOptions(opts)
+	c.Run("http://hostb/page1.html")
+
+	assertCallCount(spy, eMKError, 1, t)
+	if e.Kind != CekFetch {
+		t.Fatalf("Expected error kind Fetch, got %v\n", e.Kind)
 	}
 }
 */

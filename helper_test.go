@@ -58,9 +58,9 @@ func assertIsNotInLog(nm string, buf bytes.Buffer, s string, t *testing.T) {
 func assertLog(nm string, buf bytes.Buffer, s string, in bool, t *testing.T) {
 	if lg := buf.String(); strings.Contains(lg, s) != in {
 		if in {
-			t.Errorf("FAIL %s - expected log to contain %s.", nm, s)
+			t.Errorf("FAIL %s - expected log to contain '%s'.", nm, s)
 		} else {
-			t.Errorf("FAIL %s - expected log NOT to contain %s.", nm, s)
+			t.Errorf("FAIL %s - expected log NOT to contain '%s'.", nm, s)
 		}
 		t.Logf("Log is: %s", lg)
 	}
