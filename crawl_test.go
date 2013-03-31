@@ -1,19 +1,11 @@
 package gocrawl
 
 import (
-	"errors"
-	"github.com/PuerkitoBio/goquery"
-	"io/ioutil"
-	"net"
-	"net/http"
-	"net/url"
-	"strings"
 	"testing"
-	"time"
 )
 
 // Type a is a simple syntax helper to create test cases' asserts.
-type a map[extensionMethodKey]int
+type a map[extensionMethodKey]int64
 
 // Test case structure.
 type testCase struct {
@@ -25,8 +17,8 @@ type testCase struct {
 
 var (
 	// Actual definition of test cases.
-	cases = [...]testCase{
-		testCase{
+	cases = [...]*testCase{
+		&testCase{
 			"AllSameHost",
 			&Options{
 				SameHostOnly: true,
@@ -46,13 +38,29 @@ var (
 )
 
 func TestRunner(t *testing.T) {
-
+	for _, tc := range cases {
+		t.Logf("running %s...", tc.name)
+		runTestCase(t, tc)
+	}
 }
 
-func runTestCase(tc *testCase)
+func runTestCase(t *testing.T, tc *testCase) {
+	ff := newFileFetcher()
+	spy := newSpy(ff, true)
+	tc.opts.Extender = spy
+	c := NewCrawlerWithOptions(tc.opts)
+
+	if err := c.Run(tc.seeds); err != nil && err != ErrMaxVisits {
+		t.Errorf("%s: %s", tc.name, err)
+	}
+
+	for emk, cnt := range tc.asserts {
+		assertCallCount(spy, emk, cnt, t)
+	}
+}
 
 // TODO : Test Panic in visit, filter, etc.
-
+/*
 func TestAllSameHost(t *testing.T) {
 	opts := NewOptions(nil)
 	opts.SameHostOnly = true
@@ -693,3 +701,4 @@ func TestSameHostPolicyRejectWithNormalizedSourceUrl(t *testing.T) {
 	str := "ignore on same host policy: http://hostb/page1.html"
 	assertIsInLog(spy.b, str, t)
 }
+*/

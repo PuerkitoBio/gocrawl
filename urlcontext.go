@@ -137,17 +137,22 @@ func (this *Crawler) stringToURLContext(str string, src *url.URL) (*URLContext, 
 }
 
 func (this *Crawler) urlToURLContext(u, src *url.URL) *URLContext {
+	var rawSrc *url.URL
+
 	rawU := *u
 	purell.NormalizeURL(u, this.Options.URLNormalizationFlags)
-	rawSrc := *src
-	purell.NormalizeURL(src, this.Options.URLNormalizationFlags)
+	if src != nil {
+		rawSrc = &url.URL{}
+		*rawSrc = *src
+		purell.NormalizeURL(src, this.Options.URLNormalizationFlags)
+	}
 
 	return &URLContext{
 		this.Options.HeadBeforeGet,
 		nil,
 		&rawU,
 		u,
-		&rawSrc,
+		rawSrc,
 		src,
 	}
 }

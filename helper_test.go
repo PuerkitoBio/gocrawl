@@ -2,13 +2,7 @@ package gocrawl
 
 import (
 	"bytes"
-	"github.com/PuerkitoBio/goquery"
-	"net/http"
-	"net/url"
-	"os"
-	"path"
 	"strings"
-	"sync"
 	"testing"
 	"time"
 )
@@ -17,6 +11,7 @@ const (
 	DefaultTestCrawlDelay = 100 * time.Millisecond
 )
 
+/*
 func newSpyExtenderConfigured(visitDelay time.Duration, returnUrls []*url.URL, doLinks bool,
 	filterDelay time.Duration, filterWhitelist ...string) *spyExtender {
 
@@ -50,6 +45,7 @@ func runFileFetcherWithOptions(opts *Options, urlSel []string, seeds []string) (
 	c.Run(seeds...)
 	return spy
 }
+*/
 
 func assertIsInLog(buf bytes.Buffer, s string, t *testing.T) {
 	assertLog(buf, s, true, t)

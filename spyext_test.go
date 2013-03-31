@@ -1,5 +1,13 @@
 package gocrawl
 
+import (
+	"bytes"
+	"github.com/PuerkitoBio/goquery"
+	"net/http"
+	"sync"
+	"time"
+)
+
 // Extension method enum
 type extensionMethodKey uint8
 
@@ -75,42 +83,42 @@ func (this *spyExtender) Log(logFlags LogFlags, msgLevel LogFlags, msg string) {
 	}
 }
 
-func (this *spyExtender) Visit(res *http.Response, doc *goquery.Document) ([]*url.URL, bool) {
+func (this *spyExtender) Visit(ctx *URLContext, res *http.Response, doc *goquery.Document) (harvested interface{}, findLinks bool) {
 	this.incCallCount(eMKVisit, 1)
-	if f, ok := this.methods[eMKVisit].(func(res *http.Response, doc *goquery.Document) ([]*url.URL, bool)); ok {
-		return f(res, doc)
+	if f, ok := this.methods[eMKVisit].(func(*URLContext, *http.Response, *goquery.Document) (interface{}, bool)); ok {
+		return f(ctx, res, doc)
 	}
-	return this.ext.Visit(res, doc)
+	return this.ext.Visit(ctx, res, doc)
 }
 
-func (this *spyExtender) Filter(target *url.URL, from *url.URL, isVisited bool, origin EnqueueOrigin) (bool, int, HeadRequestMode) {
+func (this *spyExtender) Filter(ctx *URLContext, isVisited bool) bool {
 	this.incCallCount(eMKFilter, 1)
-	if f, ok := this.methods[eMKFilter].(func(target *url.URL, from *url.URL, isVisited bool, origin EnqueueOrigin) (bool, int, HeadRequestMode)); ok {
-		return f(target, from, isVisited, origin)
+	if f, ok := this.methods[eMKFilter].(func(*URLContext, bool) bool); ok {
+		return f(ctx, isVisited)
 	}
-	return this.ext.Filter(target, from, isVisited, origin)
+	return this.ext.Filter(ctx, isVisited)
 }
 
-func (this *spyExtender) Start(seeds []string) []string {
+func (this *spyExtender) Start(seeds interface{}) interface{} {
 	this.incCallCount(eMKStart, 1)
-	if f, ok := this.methods[eMKStart].(func(seeds []string) []string); ok {
+	if f, ok := this.methods[eMKStart].(func(interface{}) interface{}); ok {
 		return f(seeds)
 	}
 	return this.ext.Start(seeds)
 }
 
-func (this *spyExtender) End(reason EndReason) {
+func (this *spyExtender) End(err error) {
 	this.incCallCount(eMKEnd, 1)
-	if f, ok := this.methods[eMKEnd].(func(reason EndReason)); ok {
-		f(reason)
+	if f, ok := this.methods[eMKEnd].(func(error)); ok {
+		f(err)
 		return
 	}
-	this.ext.End(reason)
+	this.ext.End(err)
 }
 
 func (this *spyExtender) Error(err *CrawlError) {
 	this.incCallCount(eMKError, 1)
-	if f, ok := this.methods[eMKError].(func(err *CrawlError)); ok {
+	if f, ok := this.methods[eMKError].(func(*CrawlError)); ok {
 		f(err)
 		return
 	}
@@ -119,68 +127,68 @@ func (this *spyExtender) Error(err *CrawlError) {
 
 func (this *spyExtender) ComputeDelay(host string, di *DelayInfo, lastFetch *FetchInfo) time.Duration {
 	this.incCallCount(eMKComputeDelay, 1)
-	if f, ok := this.methods[eMKComputeDelay].(func(host string, di *DelayInfo, lastFetch *FetchInfo) time.Duration); ok {
+	if f, ok := this.methods[eMKComputeDelay].(func(string, *DelayInfo, *FetchInfo) time.Duration); ok {
 		return f(host, di, lastFetch)
 	}
 	return this.ext.ComputeDelay(host, di, lastFetch)
 }
 
-func (this *spyExtender) Fetch(u *url.URL, userAgent string, headRequest bool) (res *http.Response, err error) {
+func (this *spyExtender) Fetch(ctx *URLContext, userAgent string, headRequest bool) (*http.Response, error) {
 	this.incCallCount(eMKFetch, 1)
-	if f, ok := this.methods[eMKFetch].(func(u *url.URL, userAgent string, headRequest bool) (res *http.Response, err error)); ok {
-		return f(u, userAgent, headRequest)
+	if f, ok := this.methods[eMKFetch].(func(*URLContext, string, bool) (*http.Response, error)); ok {
+		return f(ctx, userAgent, headRequest)
 	}
-	return this.ext.Fetch(u, userAgent, headRequest)
+	return this.ext.Fetch(ctx, userAgent, headRequest)
 }
 
-func (this *spyExtender) RequestRobots(u *url.URL, robotAgent string) (request bool, data []byte) {
+func (this *spyExtender) RequestRobots(ctx *URLContext, robotAgent string) (data []byte, doRequest bool) {
 	this.incCallCount(eMKRequestRobots, 1)
-	if f, ok := this.methods[eMKRequestRobots].(func(u *url.URL, robotAgent string) (request bool, data []byte)); ok {
-		return f(u, robotAgent)
+	if f, ok := this.methods[eMKRequestRobots].(func(*URLContext, string) ([]byte, bool)); ok {
+		return f(ctx, robotAgent)
 	}
-	return this.ext.RequestRobots(u, robotAgent)
+	return this.ext.RequestRobots(ctx, robotAgent)
 }
 
-func (this *spyExtender) RequestGet(headRes *http.Response) bool {
+func (this *spyExtender) RequestGet(ctx *URLContext, headRes *http.Response) bool {
 	this.incCallCount(eMKRequestGet, 1)
-	if f, ok := this.methods[eMKRequestGet].(func(headRes *http.Response) bool); ok {
-		return f(headRes)
+	if f, ok := this.methods[eMKRequestGet].(func(*URLContext, *http.Response) bool); ok {
+		return f(ctx, headRes)
 	}
-	return this.ext.RequestGet(headRes)
+	return this.ext.RequestGet(ctx, headRes)
 }
 
-func (this *spyExtender) FetchedRobots(res *http.Response) {
+func (this *spyExtender) FetchedRobots(ctx *URLContext, res *http.Response) {
 	this.incCallCount(eMKFetchedRobots, 1)
-	if f, ok := this.methods[eMKFetchedRobots].(func(res *http.Response)); ok {
-		f(res)
+	if f, ok := this.methods[eMKFetchedRobots].(func(*URLContext, *http.Response)); ok {
+		f(ctx, res)
 		return
 	}
-	this.ext.FetchedRobots(res)
+	this.ext.FetchedRobots(ctx, res)
 }
 
-func (this *spyExtender) Enqueued(u *url.URL, from *url.URL) {
+func (this *spyExtender) Enqueued(ctx *URLContext) {
 	this.incCallCount(eMKEnqueued, 1)
-	if f, ok := this.methods[eMKEnqueued].(func(u *url.URL, from *url.URL)); ok {
-		f(u, from)
+	if f, ok := this.methods[eMKEnqueued].(func(*URLContext)); ok {
+		f(ctx)
 		return
 	}
-	this.ext.Enqueued(u, from)
+	this.ext.Enqueued(ctx)
 }
 
-func (this *spyExtender) Visited(u *url.URL, harvested []*url.URL) {
+func (this *spyExtender) Visited(ctx *URLContext, harvested interface{}) {
 	this.incCallCount(eMKVisited, 1)
-	if f, ok := this.methods[eMKVisited].(func(u *url.URL, harvested []*url.URL)); ok {
-		f(u, harvested)
+	if f, ok := this.methods[eMKVisited].(func(*URLContext, interface{})); ok {
+		f(ctx, harvested)
 		return
 	}
-	this.ext.Visited(u, harvested)
+	this.ext.Visited(ctx, harvested)
 }
 
-func (this *spyExtender) Disallowed(u *url.URL) {
+func (this *spyExtender) Disallowed(ctx *URLContext) {
 	this.incCallCount(eMKDisallowed, 1)
-	if f, ok := this.methods[eMKDisallowed].(func(u *url.URL)); ok {
-		f(u)
+	if f, ok := this.methods[eMKDisallowed].(func(*URLContext)); ok {
+		f(ctx)
 		return
 	}
-	this.ext.Disallowed(u)
+	this.ext.Disallowed(ctx)
 }

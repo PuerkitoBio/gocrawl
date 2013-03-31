@@ -1,5 +1,6 @@
 package gocrawl
 
+/*
 import (
 	"github.com/PuerkitoBio/goquery"
 	"net/http"
@@ -49,3 +50,4 @@ func ExampleCrawl() {
 
 	// xOutput: voluntarily fail to see log output
 }
+*/

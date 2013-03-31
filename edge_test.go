@@ -1,5 +1,6 @@
 package gocrawl
 
+/*
 import (
 	"testing"
 	"time"
@@ -120,3 +121,4 @@ func TestLongCrawlDelayHighCpu(t *testing.T) {
 	assertCallCount(spy, eMKVisit, 3, t)
 	assertCallCount(spy, eMKFilter, 10, t)
 }
+*/
