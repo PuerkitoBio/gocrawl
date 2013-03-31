@@ -1,63 +1,139 @@
 package gocrawl
 
 import (
+	"strings"
 	"testing"
+	"time"
 )
 
 // Type a is a simple syntax helper to create test cases' asserts.
 type a map[extensionMethodKey]int64
 
+// Type f is a simple syntax helper to create test cases' extension functions.
+type f map[extensionMethodKey]interface{}
+
 // Test case structure.
 type testCase struct {
-	name    string
-	opts    *Options
-	seeds   interface{}
-	asserts a
+	name       string
+	opts       *Options
+	seeds      interface{}
+	funcs      f
+	asserts    a
+	logAsserts []string
 }
 
 var (
 	// Actual definition of test cases.
+	// Prefix name with "*" to run this single starred test.
+	// Prefix name with "!" to ignore this test.
 	cases = [...]*testCase{
 		&testCase{
-			"AllSameHost",
-			&Options{
+			name: "AllSameHost",
+			opts: &Options{
 				SameHostOnly: true,
 				CrawlDelay:   DefaultTestCrawlDelay,
 				LogFlags:     LogAll,
 			},
-			[]string{
+			seeds: []string{
 				"http://hosta/page1.html",
 				"http://hosta/page4.html",
 			},
-			a{
+			asserts: a{
 				eMKVisit:  5,
 				eMKFilter: 13,
 			},
 		},
 
 		&testCase{
-			"AllNotSameHost",
-			&Options{
+			name: "AllNotSameHost",
+			opts: &Options{
 				SameHostOnly: false,
 				CrawlDelay:   DefaultTestCrawlDelay,
 				LogFlags:     LogAll,
 			},
-			[]string{
+			seeds: []string{
 				"http://hosta/page1.html",
 				"http://hosta/page4.html",
 			},
-			a{
+			asserts: a{
 				eMKVisit:  10,
 				eMKFilter: 24,
+			},
+		},
+
+		&testCase{
+			name: "SelectOnlyPage1s",
+			opts: &Options{
+				SameHostOnly: false,
+				CrawlDelay:   DefaultTestCrawlDelay,
+				LogFlags:     LogAll,
+			},
+			seeds: []string{
+				"http://hosta/page1.html",
+				"http://hosta/page4.html",
+				"http://hostb/pageunlinked.html",
+			},
+			funcs: f{
+				eMKFilter: func(ctx *URLContext, isVisited bool) bool {
+					if ctx.normalizedURL.Path == "/page1.html" {
+						return !isVisited
+					}
+					return false
+				},
+			},
+			asserts: a{
+				eMKVisit:  3, // hostd not visited (not even fetched) because linked only from hostc/page3, which is not a page1
+				eMKFilter: 11,
+			},
+		},
+
+		&testCase{
+			name: "IdleTimeOut",
+			opts: &Options{
+				SameHostOnly:  false,
+				WorkerIdleTTL: 50 * time.Millisecond,
+				CrawlDelay:    DefaultTestCrawlDelay,
+				LogFlags:      LogInfo,
+			},
+			seeds: []string{
+				"http://hosta/page1.html",
+				"http://hosta/page4.html",
+				"http://hostb/pageunlinked.html",
+			},
+			logAsserts: []string{
+				"worker for host hostd cleared on idle policy\n",
+				"worker for host hostunknown cleared on idle policy\n",
 			},
 		},
 	}
 )
 
 func TestRunner(t *testing.T) {
+	var singleTC *testCase
+
+	// Check if a single case should run
 	for _, tc := range cases {
-		t.Logf("running %s...", tc.name)
-		runTestCase(t, tc)
+		if strings.HasPrefix(tc.name, "*") {
+			if singleTC == nil {
+				singleTC = tc
+			} else {
+				t.Fatal("multiple test cases for isolated run (prefixed with '*')")
+			}
+		}
+	}
+	if singleTC != nil {
+		singleTC.name = singleTC.name[1:]
+		t.Logf("running %s in isolated run...", singleTC.name)
+		runTestCase(t, singleTC)
+	} else {
+		for _, tc := range cases {
+			if strings.HasPrefix(tc.name, "!") {
+				t.Logf("ignoring %s", tc.name[1:])
+			} else {
+				t.Logf("running %s...", tc.name)
+				runTestCase(t, tc)
+			}
+		}
 	}
 }
 
@@ -66,53 +142,37 @@ func runTestCase(t *testing.T, tc *testCase) {
 	spy := newSpy(ff, true)
 	tc.opts.Extender = spy
 	c := NewCrawlerWithOptions(tc.opts)
-
-	if err := c.Run(tc.seeds); err != nil && err != ErrMaxVisits {
-		t.Errorf("%s: %s", tc.name, err)
+	if tc.funcs != nil {
+		for emk, f := range tc.funcs {
+			spy.setExtensionMethod(emk, f)
+		}
 	}
 
+	if err := c.Run(tc.seeds); err != nil && err != ErrMaxVisits {
+		t.Errorf("FAIL %s - %s.", tc.name, err)
+	}
+
+	assertCnt := 0
 	for emk, cnt := range tc.asserts {
 		assertCallCount(spy, tc.name, emk, cnt, t)
+		assertCnt++
+	}
+	for _, s := range tc.logAsserts {
+		if strings.HasPrefix(s, "!") {
+			assertIsNotInLog(tc.name, spy.b, s[1:], t)
+		} else {
+			assertIsInLog(tc.name, spy.b, s, t)
+		}
+		assertCnt++
+	}
+	if assertCnt == 0 {
+		t.Errorf("FAIL %s - no asserts.", tc.name)
 	}
 }
 
 // TODO : Test Panic in visit, filter, etc.
+// TODO : Test state with URL, various types supported as interface{} for seeds and harvested
 /*
-func TestSelectOnlyPage1s(t *testing.T) {
-	opts := NewOptions(nil)
-	opts.SameHostOnly = false
-	opts.CrawlDelay = DefaultTestCrawlDelay
-	opts.LogFlags = LogError | LogTrace
-	spy := runFileFetcherWithOptions(opts,
-		[]string{"http://hosta/page1.html", "http://hostb/page1.html", "http://hostc/page1.html", "http://hostd/page1.html"},
-		[]string{"http://hosta/page1.html", "http://hosta/page4.html", "http://hostb/pageunlinked.html"})
-
-	assertCallCount(spy, eMKVisit, 3, t)
-	assertCallCount(spy, eMKFilter, 11, t)
-}
-
-func TestRunTwiceSameInstance(t *testing.T) {
-	spy := newSpyExtenderConfigured(0, nil, true, 0, "*")
-
-	opts := NewOptions(spy)
-	opts.SameHostOnly = true
-	opts.CrawlDelay = DefaultTestCrawlDelay
-	opts.LogFlags = LogNone
-	c := NewCrawlerWithOptions(opts)
-	c.Run("http://hosta/page1.html", "http://hosta/page4.html")
-
-	assertCallCount(spy, eMKVisit, 5, t)
-	assertCallCount(spy, eMKFilter, 13, t)
-
-	spy = newSpyExtenderConfigured(0, nil, true, 0, "http://hosta/page1.html", "http://hostb/page1.html", "http://hostc/page1.html", "http://hostd/page1.html")
-	opts.SameHostOnly = false
-	opts.Extender = spy
-	c.Run("http://hosta/page1.html", "http://hosta/page4.html", "http://hostb/pageunlinked.html")
-
-	assertCallCount(spy, eMKVisit, 3, t)
-	assertCallCount(spy, eMKFilter, 11, t)
-}
-
 func TestIdleTimeOut(t *testing.T) {
 	opts := NewOptions(nil)
 	opts.SameHostOnly = false
@@ -695,5 +755,26 @@ func TestSameHostPolicyRejectWithNormalizedSourceUrl(t *testing.T) {
 	assertCallCount(spy, eMKVisit, 1, t)  // hosta/page1
 	str := "ignore on same host policy: http://hostb/page1.html"
 	assertIsInLog(spy.b, str, t)
+}
+func TestRunTwiceSameInstance(t *testing.T) {
+	spy := newSpyExtenderConfigured(0, nil, true, 0, "*")
+
+	opts := NewOptions(spy)
+	opts.SameHostOnly = true
+	opts.CrawlDelay = DefaultTestCrawlDelay
+	opts.LogFlags = LogNone
+	c := NewCrawlerWithOptions(opts)
+	c.Run("http://hosta/page1.html", "http://hosta/page4.html")
+
+	assertCallCount(spy, eMKVisit, 5, t)
+	assertCallCount(spy, eMKFilter, 13, t)
+
+	spy = newSpyExtenderConfigured(0, nil, true, 0, "http://hosta/page1.html", "http://hostb/page1.html", "http://hostc/page1.html", "http://hostd/page1.html")
+	opts.SameHostOnly = false
+	opts.Extender = spy
+	c.Run("http://hosta/page1.html", "http://hosta/page4.html", "http://hostb/pageunlinked.html")
+
+	assertCallCount(spy, eMKVisit, 3, t)
+	assertCallCount(spy, eMKFilter, 11, t)
 }
 */

@@ -58,9 +58,9 @@ func assertIsNotInLog(nm string, buf bytes.Buffer, s string, t *testing.T) {
 func assertLog(nm string, buf bytes.Buffer, s string, in bool, t *testing.T) {
 	if lg := buf.String(); strings.Contains(lg, s) != in {
 		if in {
-			t.Errorf("%s - expected log to contain %s.", nm, s)
+			t.Errorf("FAIL %s - expected log to contain %s.", nm, s)
 		} else {
-			t.Errorf("%s - expected log NOT to contain %s.", nm, s)
+			t.Errorf("FAIL %s - expected log NOT to contain %s.", nm, s)
 		}
 		t.Logf("Log is: %s", lg)
 	}
@@ -69,12 +69,12 @@ func assertLog(nm string, buf bytes.Buffer, s string, in bool, t *testing.T) {
 func assertCallCount(spy callCounter, nm string, key extensionMethodKey, i int64, t *testing.T) {
 	cnt := spy.getCallCount(key)
 	if cnt != i {
-		t.Errorf("%s - expected %d calls to %s, got %d.", nm, i, key, cnt)
+		t.Errorf("FAIL %s - expected %d calls to %s, got %d.", nm, i, key, cnt)
 	}
 }
 
 func assertPanic(nm string, t *testing.T) {
 	if e := recover(); e == nil {
-		t.Errorf("%s - expected a panic.", nm)
+		t.Errorf("FAIL %s - expected a panic.", nm)
 	}
 }

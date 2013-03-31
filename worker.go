@@ -298,7 +298,7 @@ func (this *worker) fetchUrl(ctx *URLContext, agent string, headRequest bool) (r
 func (this *worker) sendResponse(ctx *URLContext, visited bool, harvested interface{}, idleDeath bool) {
 	// Push harvested urls back to crawler, even if empty (uses the channel communication
 	// to decrement reference count of pending URLs)
-	if !isRobotsURL(ctx.url) {
+	if ctx == nil || !isRobotsURL(ctx.url) {
 		// If a stop signal has been received, ignore the response, since the push
 		// channel may be full and could block indefinitely.
 		select {
