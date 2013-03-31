@@ -28,6 +28,28 @@ const (
 	eMKLast
 )
 
+var (
+	lookupEmk = [...]string{
+		eMKStart:         "Start",
+		eMKEnd:           "End",
+		eMKError:         "Error",
+		eMKComputeDelay:  "ComputeDelay",
+		eMKFetch:         "Fetch",
+		eMKRequestRobots: "RequestRobots",
+		eMKRequestGet:    "RequestGet",
+		eMKFetchedRobots: "FetchedRobots",
+		eMKFilter:        "Filter",
+		eMKEnqueued:      "Enqueued",
+		eMKVisit:         "Visit",
+		eMKVisited:       "Visited",
+		eMKDisallowed:    "Disallowed",
+	}
+)
+
+func (this extensionMethodKey) String() string {
+	return lookupEmk[this]
+}
+
 // callCounter interface implemented by the Spy Extender.
 type callCounter interface {
 	getCallCount(extensionMethodKey) int64

@@ -47,34 +47,34 @@ func runFileFetcherWithOptions(opts *Options, urlSel []string, seeds []string) (
 }
 */
 
-func assertIsInLog(buf bytes.Buffer, s string, t *testing.T) {
-	assertLog(buf, s, true, t)
+func assertIsInLog(nm string, buf bytes.Buffer, s string, t *testing.T) {
+	assertLog(nm, buf, s, true, t)
 }
 
-func assertIsNotInLog(buf bytes.Buffer, s string, t *testing.T) {
-	assertLog(buf, s, false, t)
+func assertIsNotInLog(nm string, buf bytes.Buffer, s string, t *testing.T) {
+	assertLog(nm, buf, s, false, t)
 }
 
-func assertLog(buf bytes.Buffer, s string, in bool, t *testing.T) {
+func assertLog(nm string, buf bytes.Buffer, s string, in bool, t *testing.T) {
 	if lg := buf.String(); strings.Contains(lg, s) != in {
 		if in {
-			t.Errorf("Expected log to contain %s.", s)
+			t.Errorf("%s - expected log to contain %s.", nm, s)
 		} else {
-			t.Errorf("Expected log NOT to contain %s.", s)
+			t.Errorf("%s - expected log NOT to contain %s.", nm, s)
 		}
 		t.Logf("Log is: %s", lg)
 	}
 }
 
-func assertCallCount(spy callCounter, key extensionMethodKey, i int64, t *testing.T) {
+func assertCallCount(spy callCounter, nm string, key extensionMethodKey, i int64, t *testing.T) {
 	cnt := spy.getCallCount(key)
 	if cnt != i {
-		t.Errorf("Expected %d call count, got %d.", i, cnt)
+		t.Errorf("%s - expected %d calls to %s, got %d.", nm, i, key, cnt)
 	}
 }
 
-func assertPanic(t *testing.T) {
+func assertPanic(nm string, t *testing.T) {
 	if e := recover(); e == nil {
-		t.Error("Expected a panic.")
+		t.Errorf("%s - expected a panic.", nm)
 	}
 }

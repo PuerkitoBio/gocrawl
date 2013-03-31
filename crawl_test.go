@@ -34,6 +34,23 @@ var (
 				eMKFilter: 13,
 			},
 		},
+
+		&testCase{
+			"AllNotSameHost",
+			&Options{
+				SameHostOnly: false,
+				CrawlDelay:   DefaultTestCrawlDelay,
+				LogFlags:     LogAll,
+			},
+			[]string{
+				"http://hosta/page1.html",
+				"http://hosta/page4.html",
+			},
+			a{
+				eMKVisit:  10,
+				eMKFilter: 24,
+			},
+		},
 	}
 )
 
@@ -55,34 +72,12 @@ func runTestCase(t *testing.T, tc *testCase) {
 	}
 
 	for emk, cnt := range tc.asserts {
-		assertCallCount(spy, emk, cnt, t)
+		assertCallCount(spy, tc.name, emk, cnt, t)
 	}
 }
 
 // TODO : Test Panic in visit, filter, etc.
 /*
-func TestAllSameHost(t *testing.T) {
-	opts := NewOptions(nil)
-	opts.SameHostOnly = true
-	opts.CrawlDelay = DefaultTestCrawlDelay
-	opts.LogFlags = LogAll
-	spy := runFileFetcherWithOptions(opts, []string{"*"}, []string{"http://hosta/page1.html", "http://hosta/page4.html"})
-
-	assertCallCount(spy, eMKVisit, 5, t)
-	assertCallCount(spy, eMKFilter, 13, t)
-}
-
-func TestAllNotSameHost(t *testing.T) {
-	opts := NewOptions(nil)
-	opts.SameHostOnly = false
-	opts.CrawlDelay = DefaultTestCrawlDelay
-	opts.LogFlags = LogError | LogTrace
-	spy := runFileFetcherWithOptions(opts, []string{"*"}, []string{"http://hosta/page1.html", "http://hosta/page4.html"})
-
-	assertCallCount(spy, eMKVisit, 10, t)
-	assertCallCount(spy, eMKFilter, 24, t)
-}
-
 func TestSelectOnlyPage1s(t *testing.T) {
 	opts := NewOptions(nil)
 	opts.SameHostOnly = false
