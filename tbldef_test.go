@@ -26,6 +26,7 @@ type testCase struct {
 	asserts      a
 	logAsserts   []string
 	customAssert func(*spyExtender, *testing.T)
+	external     func(*testing.T, *testCase, bool)
 }
 
 var (
@@ -914,6 +915,51 @@ var (
 				eMKFetch:      5, // src.ca, 2*radio-canada.ca and both robots.txt
 				eMKVisit:      1, // src.ca redirects, radio-canada.ca visited
 			},
+		},
+
+		&testCase{
+			name:     "NoCrawlDelay",
+			external: testNoCrawlDelay,
+		},
+
+		&testCase{
+			name:     "NoExtender",
+			external: testNoExtender,
+		},
+
+		&testCase{
+			name:     "CrawlDelay",
+			external: testCrawlDelay,
+		},
+
+		&testCase{
+			name:     "UserAgent",
+			external: testUserAgent,
+		},
+
+		&testCase{
+			name:     "RunTwiceSameInstance",
+			external: testRunTwiceSameInstance,
+		},
+
+		&testCase{
+			name:     "EnqueueChanEmbedded",
+			external: testEnqueueChanEmbedded,
+		},
+
+		&testCase{
+			name:     "EnqueueChanShadowed",
+			external: testEnqueueChanShadowed,
+		},
+
+		&testCase{
+			name:     "EnqueueNewUrl",
+			external: testEnqueueNewUrl,
+		},
+
+		&testCase{
+			name:     "EnqueueNewUrlOnError",
+			external: testEnqueueNewUrlOnError,
 		},
 	}
 )
