@@ -565,6 +565,143 @@ var (
 			},
 		},
 
+		&testCase{
+			name: "EnqueueChanDefault",
+			opts: &Options{
+				SameHostOnly: true,
+				CrawlDelay:   DefaultTestCrawlDelay,
+				LogFlags:     LogAll,
+			},
+			seeds: "",
+			customAssert: func(spy *spyExtender, t *testing.T) {
+				assertTrue(spy.EnqueueChan != nil, "expected EnqueueChan to be non-nil")
+			},
+		},
+
+		&testCase{
+			name: "RobotDenyAll",
+			opts: &Options{
+				SameHostOnly:   false,
+				CrawlDelay:     DefaultTestCrawlDelay,
+				LogFlags:       LogAll,
+				RobotUserAgent: DefaultRobotUserAgent,
+			},
+			seeds: "http://robota/page1.html",
+			asserts: a{
+				eMKVisit:  0,
+				eMKFilter: 1,
+			},
+		},
+
+		&testCase{
+			name: "RobotPartialDenyGooglebot",
+			opts: &Options{
+				SameHostOnly:   false,
+				CrawlDelay:     DefaultTestCrawlDelay,
+				LogFlags:       LogAll,
+				RobotUserAgent: DefaultRobotUserAgent,
+			},
+			seeds: "http://robotb/page1.html",
+			asserts: a{
+				eMKVisit:  2,
+				eMKFilter: 4,
+			},
+		},
+
+		&testCase{
+			name: "RobotDenyOtherBot",
+			opts: &Options{
+				SameHostOnly:   false,
+				CrawlDelay:     DefaultTestCrawlDelay,
+				LogFlags:       LogAll,
+				RobotUserAgent: "NotGoogleBot",
+			},
+			seeds: "http://robotb/page1.html",
+			asserts: a{
+				eMKVisit:  4,
+				eMKFilter: 5,
+			},
+		},
+
+		&testCase{
+			name: "RobotExplicitAllowPattern",
+			opts: &Options{
+				SameHostOnly:   false,
+				CrawlDelay:     DefaultTestCrawlDelay,
+				LogFlags:       LogAll,
+				RobotUserAgent: DefaultRobotUserAgent,
+			},
+			seeds: "http://robotc/page1.html",
+			asserts: a{
+				eMKVisit:  4,
+				eMKFilter: 5,
+			},
+		},
+
+		&testCase{
+			name: "RobotCrawlDelay",
+			opts: &Options{
+				SameHostOnly:   true,
+				CrawlDelay:     DefaultTestCrawlDelay,
+				LogFlags:       LogAll,
+				RobotUserAgent: DefaultRobotUserAgent,
+			},
+			seeds: "http://robotc/page1.html",
+			asserts: a{
+				eMKVisit:  4,
+				eMKFilter: 5,
+			},
+			logAsserts: []string{
+				"using crawl-delay: 200ms\n",
+			},
+		},
+
+		&testCase{
+			name: "CachedRobot",
+			opts: &Options{
+				SameHostOnly:   true,
+				CrawlDelay:     DefaultTestCrawlDelay,
+				LogFlags:       LogAll,
+				RobotUserAgent: DefaultRobotUserAgent,
+			},
+			seeds: "http://robota/page1.html",
+			funcs: f{
+				eMKRequestRobots: func(ctx *URLContext, agent string) ([]byte, bool) {
+					return []byte("User-agent: *\nDisallow:/page2.html"), false
+				},
+			},
+			asserts: a{
+				eMKVisit:         1,
+				eMKEnqueued:      3,
+				eMKRequestRobots: 1,
+				eMKDisallowed:    1,
+			},
+		},
+
+		&testCase{
+			name: "FetchedRobot",
+			opts: &Options{
+				SameHostOnly:   true,
+				CrawlDelay:     DefaultTestCrawlDelay,
+				LogFlags:       LogAll,
+				RobotUserAgent: DefaultRobotUserAgent,
+			},
+			seeds: "http://robotc/page4.html",
+			funcs: f{
+				eMKFetchedRobots: func(ctx *URLContext, res *http.Response) {
+					b, err := ioutil.ReadAll(res.Body)
+					if assertTrue(err == nil, "%s", err) {
+						assertTrue(len(b) > 0, "expected fetched robots.txt body not to be empty")
+					}
+				},
+			},
+			asserts: a{
+				eMKRequestRobots: 1,
+				eMKEnqueued:      2,
+				eMKFetchedRobots: 1,
+			},
+		},
+
 		/*
 			&testCase{
 				name: "RequestGetFalse",

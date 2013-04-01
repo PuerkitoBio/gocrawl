@@ -9,19 +9,6 @@ import (
 	"testing"
 )
 
-func TestEnqueueChanDefault(t *testing.T) {
-	var de = new(DefaultExtender)
-
-	c := NewCrawler(de)
-	if de.EnqueueChan != nil {
-		t.Fatal("Expected EnqueueChan to be nil")
-	}
-	c.Run()
-	if de.EnqueueChan == nil {
-		t.Fatal("Expected EnqueueChan to be non-nil")
-	}
-}
-
 func TestEnqueueChanEmbedded(t *testing.T) {
 	type MyExt struct {
 		SomeFieldBefore bool

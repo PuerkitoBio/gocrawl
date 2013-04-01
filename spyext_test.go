@@ -59,21 +59,24 @@ type callCounter interface {
 // The spy extender adds counting the number of calls for each extender method,
 // and tracks the log so that it can be asserted.
 type spyExtender struct {
-	ext          Extender
+	Extender
 	useLogBuffer bool
 	callCount    map[extensionMethodKey]int64
 	methods      map[extensionMethodKey]interface{}
 	b            bytes.Buffer
-	// Since EnqueueChan is unaccessible for GoCrawl to set, add it as an explicit field
-	EnqueueChan chan<- interface{}
-	m           sync.RWMutex
+	m            sync.RWMutex
+	EnqueueChan  chan<- interface{} // Redefine here, not accessible on DefaultExtender
 }
 
 func newSpy(ext Extender, useLogBuffer bool) *spyExtender {
-	return &spyExtender{ext: ext,
-		useLogBuffer: useLogBuffer,
-		callCount:    make(map[extensionMethodKey]int64, eMKLast),
-		methods:      make(map[extensionMethodKey]interface{}, 2),
+	return &spyExtender{
+		ext,
+		useLogBuffer,
+		make(map[extensionMethodKey]int64, eMKLast),
+		make(map[extensionMethodKey]interface{}, 2),
+		bytes.Buffer{},
+		sync.RWMutex{},
+		nil,
 	}
 }
 
@@ -101,7 +104,7 @@ func (this *spyExtender) Log(logFlags LogFlags, msgLevel LogFlags, msg string) {
 			this.b.WriteString(msg + "\n")
 		}
 	} else {
-		this.ext.Log(logFlags, msgLevel, msg)
+		this.Extender.Log(logFlags, msgLevel, msg)
 	}
 }
 
@@ -110,7 +113,7 @@ func (this *spyExtender) Visit(ctx *URLContext, res *http.Response, doc *goquery
 	if f, ok := this.methods[eMKVisit].(func(*URLContext, *http.Response, *goquery.Document) (interface{}, bool)); ok {
 		return f(ctx, res, doc)
 	}
-	return this.ext.Visit(ctx, res, doc)
+	return this.Extender.Visit(ctx, res, doc)
 }
 
 func (this *spyExtender) Filter(ctx *URLContext, isVisited bool) bool {
@@ -118,7 +121,7 @@ func (this *spyExtender) Filter(ctx *URLContext, isVisited bool) bool {
 	if f, ok := this.methods[eMKFilter].(func(*URLContext, bool) bool); ok {
 		return f(ctx, isVisited)
 	}
-	return this.ext.Filter(ctx, isVisited)
+	return this.Extender.Filter(ctx, isVisited)
 }
 
 func (this *spyExtender) Start(seeds interface{}) interface{} {
@@ -126,7 +129,7 @@ func (this *spyExtender) Start(seeds interface{}) interface{} {
 	if f, ok := this.methods[eMKStart].(func(interface{}) interface{}); ok {
 		return f(seeds)
 	}
-	return this.ext.Start(seeds)
+	return this.Extender.Start(seeds)
 }
 
 func (this *spyExtender) End(err error) {
@@ -135,7 +138,7 @@ func (this *spyExtender) End(err error) {
 		f(err)
 		return
 	}
-	this.ext.End(err)
+	this.Extender.End(err)
 }
 
 func (this *spyExtender) Error(err *CrawlError) {
@@ -144,7 +147,7 @@ func (this *spyExtender) Error(err *CrawlError) {
 		f(err)
 		return
 	}
-	this.ext.Error(err)
+	this.Extender.Error(err)
 }
 
 func (this *spyExtender) ComputeDelay(host string, di *DelayInfo, lastFetch *FetchInfo) time.Duration {
@@ -152,7 +155,7 @@ func (this *spyExtender) ComputeDelay(host string, di *DelayInfo, lastFetch *Fet
 	if f, ok := this.methods[eMKComputeDelay].(func(string, *DelayInfo, *FetchInfo) time.Duration); ok {
 		return f(host, di, lastFetch)
 	}
-	return this.ext.ComputeDelay(host, di, lastFetch)
+	return this.Extender.ComputeDelay(host, di, lastFetch)
 }
 
 func (this *spyExtender) Fetch(ctx *URLContext, userAgent string, headRequest bool) (*http.Response, error) {
@@ -160,7 +163,7 @@ func (this *spyExtender) Fetch(ctx *URLContext, userAgent string, headRequest bo
 	if f, ok := this.methods[eMKFetch].(func(*URLContext, string, bool) (*http.Response, error)); ok {
 		return f(ctx, userAgent, headRequest)
 	}
-	return this.ext.Fetch(ctx, userAgent, headRequest)
+	return this.Extender.Fetch(ctx, userAgent, headRequest)
 }
 
 func (this *spyExtender) RequestRobots(ctx *URLContext, robotAgent string) (data []byte, doRequest bool) {
@@ -168,7 +171,7 @@ func (this *spyExtender) RequestRobots(ctx *URLContext, robotAgent string) (data
 	if f, ok := this.methods[eMKRequestRobots].(func(*URLContext, string) ([]byte, bool)); ok {
 		return f(ctx, robotAgent)
 	}
-	return this.ext.RequestRobots(ctx, robotAgent)
+	return this.Extender.RequestRobots(ctx, robotAgent)
 }
 
 func (this *spyExtender) RequestGet(ctx *URLContext, headRes *http.Response) bool {
@@ -176,7 +179,7 @@ func (this *spyExtender) RequestGet(ctx *URLContext, headRes *http.Response) boo
 	if f, ok := this.methods[eMKRequestGet].(func(*URLContext, *http.Response) bool); ok {
 		return f(ctx, headRes)
 	}
-	return this.ext.RequestGet(ctx, headRes)
+	return this.Extender.RequestGet(ctx, headRes)
 }
 
 func (this *spyExtender) FetchedRobots(ctx *URLContext, res *http.Response) {
@@ -185,7 +188,7 @@ func (this *spyExtender) FetchedRobots(ctx *URLContext, res *http.Response) {
 		f(ctx, res)
 		return
 	}
-	this.ext.FetchedRobots(ctx, res)
+	this.Extender.FetchedRobots(ctx, res)
 }
 
 func (this *spyExtender) Enqueued(ctx *URLContext) {
@@ -194,7 +197,7 @@ func (this *spyExtender) Enqueued(ctx *URLContext) {
 		f(ctx)
 		return
 	}
-	this.ext.Enqueued(ctx)
+	this.Extender.Enqueued(ctx)
 }
 
 func (this *spyExtender) Visited(ctx *URLContext, harvested interface{}) {
@@ -203,7 +206,7 @@ func (this *spyExtender) Visited(ctx *URLContext, harvested interface{}) {
 		f(ctx, harvested)
 		return
 	}
-	this.ext.Visited(ctx, harvested)
+	this.Extender.Visited(ctx, harvested)
 }
 
 func (this *spyExtender) Disallowed(ctx *URLContext) {
@@ -212,5 +215,5 @@ func (this *spyExtender) Disallowed(ctx *URLContext) {
 		f(ctx)
 		return
 	}
-	this.ext.Disallowed(ctx)
+	this.Extender.Disallowed(ctx)
 }
