@@ -12,7 +12,7 @@ import (
 )
 
 // Type a is a simple syntax helper to create test cases' asserts.
-type a map[extensionMethodKey]int64
+type a map[extensionMethodKey]int
 
 // Type f is a simple syntax helper to create test cases' extension functions.
 type f map[extensionMethodKey]interface{}
@@ -702,41 +702,175 @@ var (
 			},
 		},
 
-		/*
-			&testCase{
-				name: "RequestGetFalse",
-				opts: &Options{
-					SameHostOnly:  true,
-					CrawlDelay:    DefaultTestCrawlDelay,
-					HeadBeforeGet: true,
-					LogFlags:      LogAll,
-				},
-				seeds: []string{
-					"http://hosta/page1.html",
-				},
-				funcs: f{
-					eMKRequestGet: func(ctx *URLContext, headRes *http.Response) bool {
-						if headRes.Request.URL.Path == "/page2.html" {
-							return false
-						}
-						return true
-					},
-				},
-				asserts: a{
-					eMKFetch:      6, // Once for robots.txt and page2, twice each for page1 and page3
-					eMKRequestGet: 3,
-					eMKEnqueued:   4,
-					eMKVisit:      2,
-				},
-				customAssert: func(s *spyExtender, t *testing.T) {
-					head := s.calledWithCount(ignoreCalledArg, ignoreCalledArg, true)
-					nohead := s.calledWithCount(ignoreCalledArg, ignoreCalledArg, false)
-					if head != nohead {
-						t.Errorf()
+		&testCase{
+			name: "RequestGetFalse",
+			opts: &Options{
+				SameHostOnly:  true,
+				CrawlDelay:    DefaultTestCrawlDelay,
+				HeadBeforeGet: true,
+				LogFlags:      LogAll,
+			},
+			seeds: []string{
+				"http://hosta/page1.html",
+			},
+			funcs: f{
+				eMKRequestGet: func(ctx *URLContext, headRes *http.Response) bool {
+					if strings.ToLower(headRes.Request.URL.Path) == "/page2.html" {
+						return false
 					}
+					return true
 				},
 			},
-		*/
+			asserts: a{
+				eMKFetch:      6, // Once for robots.txt and page2, twice each for page1 and page3
+				eMKRequestGet: 3,
+				eMKEnqueued:   4,
+				eMKVisit:      2,
+			},
+			customAssert: func(s *spyExtender, t *testing.T) {
+				head := s.getCalledWithCount(eMKFetch, __, __, true)
+				nohead := s.getCalledWithCount(eMKFetch, __, __, false)
+				// 3 GET: robots, page1, page3; 3 HEAD: page1, page2, page3
+				assertTrue(head == 3, "expected 3 HEAD requests, got %d", head)
+				assertTrue(nohead == 3, "expected 3 GET requests, got %d", nohead)
+			},
+		},
+
+		&testCase{
+			name: "NoHead",
+			opts: &Options{
+				SameHostOnly:  true,
+				CrawlDelay:    DefaultTestCrawlDelay,
+				HeadBeforeGet: false,
+				LogFlags:      LogAll,
+			},
+			seeds: []string{
+				"http://hostb/page1.html",
+			},
+			asserts: a{
+				eMKFetch:      4, // robots.txt and unknown.html triggers Fetch
+				eMKRequestGet: 0,
+			},
+			customAssert: func(s *spyExtender, t *testing.T) {
+				head := s.getCalledWithCount(eMKFetch, __, __, true)
+				assertTrue(head == 0, "expected no HEAD request, got %d", head)
+			},
+		},
+
+		&testCase{
+			name: "AllHead",
+			opts: &Options{
+				SameHostOnly:  true,
+				CrawlDelay:    DefaultTestCrawlDelay,
+				HeadBeforeGet: true,
+				LogFlags:      LogAll,
+			},
+			seeds: "http://hosta/page1.html",
+			asserts: a{
+				eMKFetch:      7, // Once for robots.txt, twice each for page1-3
+				eMKRequestGet: 3,
+				eMKEnqueued:   4,
+			},
+			customAssert: func(s *spyExtender, t *testing.T) {
+				head := s.getCalledWithCount(eMKFetch, __, __, true)
+				nohead := s.getCalledWithCount(eMKFetch, __, __, false)
+				assertTrue(head == nohead-1, "expected HEAD requests to be equal to GET requests minus one (robots.txt)")
+			},
+		},
+
+		&testCase{
+			name: "AllHeadWithFetchError",
+			opts: &Options{
+				SameHostOnly:  true,
+				CrawlDelay:    DefaultTestCrawlDelay,
+				HeadBeforeGet: true,
+				LogFlags:      LogAll,
+			},
+			seeds: "http://hostb/page1.html",
+			asserts: a{
+				eMKFetch:      6, // Once for robots.txt and unkwown.html, twice each for page1,2
+				eMKRequestGet: 2,
+				eMKEnqueued:   4,
+				eMKError:      1, // unknown.html HEAD request
+			},
+			customAssert: func(s *spyExtender, t *testing.T) {
+				head := s.getCalledWithCount(eMKFetch, __, __, true)
+				nohead := s.getCalledWithCount(eMKFetch, __, __, false)
+				// Head should be = 3 (page1, 2, unknown), Get should be = 3 (robots, page1, 2)
+				assertTrue(head == 3, "expected 3 HEAD requests, got %d", head)
+				assertTrue(nohead == 3, "expected 3 GET requests, got %d", nohead)
+			},
+		},
+
+		&testCase{
+			name: "HeadTrueOverride",
+			opts: &Options{
+				SameHostOnly:  true,
+				CrawlDelay:    DefaultTestCrawlDelay,
+				HeadBeforeGet: true,
+				LogFlags:      LogAll,
+			},
+			seeds: "http://hosta/page1.html",
+			funcs: f{
+				eMKFilter: func(ctx *URLContext, isVisited bool) bool {
+					// Page2: No HEAD, Page3: No enqueue
+					if strings.ToLower(ctx.url.Path) == "/page2.html" {
+						ctx.HeadBeforeGet = false
+						return !isVisited
+					} else if strings.ToLower(ctx.url.Path) == "/page3.html" {
+						return false
+					}
+					return !isVisited
+				},
+			},
+			asserts: a{
+				eMKFetch:      4, // Once for robots.txt and page2, twice for page1
+				eMKRequestGet: 1, // Page1 only, page2 ignored HEAD
+				eMKEnqueued:   3, // Page1-2 and robots
+			},
+			customAssert: func(s *spyExtender, t *testing.T) {
+				head := s.getCalledWithCount(eMKFetch, __, __, true)
+				nohead := s.getCalledWithCount(eMKFetch, __, __, false)
+				// 3 GET: robots, page1, page2; 1 HEAD: page1
+				assertTrue(head == 1, "expected 1 HEAD request, got %d", head)
+				assertTrue(nohead == 3, "expected 3 GET requests, got %d", nohead)
+			},
+		},
+
+		&testCase{
+			name: "HeadFalseOverride",
+			opts: &Options{
+				SameHostOnly:  true,
+				CrawlDelay:    DefaultTestCrawlDelay,
+				HeadBeforeGet: false,
+				LogFlags:      LogAll,
+			},
+			seeds: "http://hosta/page1.html",
+			funcs: f{
+				eMKFilter: func(ctx *URLContext, isVisited bool) bool {
+					// Page1: default, Page2: Head before get, Page3: No enqueue
+					if strings.ToLower(ctx.url.Path) == "/page2.html" {
+						ctx.HeadBeforeGet = true
+						return !isVisited
+					} else if strings.ToLower(ctx.url.Path) == "/page3.html" {
+						return false
+					}
+					return !isVisited
+				},
+			},
+			asserts: a{
+				eMKFetch:      4, // Once for robots.txt and page1, twice for page2
+				eMKRequestGet: 1, // Page2 only, page1 ignored HEAD
+				eMKEnqueued:   3, // Page1-2 and robots
+			},
+			customAssert: func(s *spyExtender, t *testing.T) {
+				head := s.getCalledWithCount(eMKFetch, __, __, true)
+				nohead := s.getCalledWithCount(eMKFetch, __, __, false)
+				// 3 GET: robots, page1, page2; 1 HEAD: page2
+				assertTrue(head == 1, "expected 1 HEAD request, got %d", head)
+				assertTrue(nohead == 3, "expected 3 GET requests, got %d", nohead)
+			},
+		},
 	}
 )
 
@@ -837,221 +971,6 @@ func runTestCase(t *testing.T, tc *testCase) {
 // TODO : Test Panic in visit, filter, etc.
 // TODO : Test state with URL, various types supported as interface{} for seeds and harvested
 /*
-func TestNoHead(t *testing.T) {
-	var calledWithHead bool
-
-	ff := newFileFetcher()
-
-	spy := newSpyExtenderFunc(eMKFetch, func(u *url.URL, userAgent string, headRequest bool) (res *http.Response, err error) {
-		if headRequest {
-			calledWithHead = true
-		}
-		return ff.Fetch(u, userAgent, headRequest)
-	})
-
-	opts := NewOptions(spy)
-	opts.SameHostOnly = true
-	opts.CrawlDelay = DefaultTestCrawlDelay
-	opts.HeadBeforeGet = false
-	opts.LogFlags = LogError | LogIgnored
-	c := NewCrawlerWithOptions(opts)
-	c.Run("http://hostb/page1.html")
-
-	if calledWithHead {
-		t.Fatal("Expected Fetch() to never be called with a HEAD request.")
-	}
-	assertCallCount(spy, eMKRequestGet, 0, t)
-	assertCallCount(spy, eMKFetch, 4, t) // robots.txt and unknown.html triggers Fetch
-}
-func TestAllHead(t *testing.T) {
-	var calledWithHead int
-	var calledWithoutHead int
-
-	ff := newFileFetcher()
-
-	spy := newSpyExtenderFunc(eMKFetch, func(u *url.URL, userAgent string, headRequest bool) (res *http.Response, err error) {
-		if headRequest {
-			calledWithHead += 1
-		} else {
-			calledWithoutHead += 1
-		}
-		return ff.Fetch(u, userAgent, headRequest)
-	})
-
-	opts := NewOptions(spy)
-	opts.SameHostOnly = true
-	opts.CrawlDelay = DefaultTestCrawlDelay
-	opts.HeadBeforeGet = true
-	opts.LogFlags = LogError | LogIgnored
-	c := NewCrawlerWithOptions(opts)
-	c.Run("http://hosta/page1.html")
-
-	if calledWithHead != (calledWithoutHead - 1) {
-		t.Fatalf("Expected HEAD requests %d to be equal to GET requests %d minus one (for robots.txt).", calledWithHead, calledWithoutHead)
-	}
-	assertCallCount(spy, eMKFetch, 7, t) // Once for robots.txt, twice each for page1-3
-	assertCallCount(spy, eMKRequestGet, 3, t)
-	assertCallCount(spy, eMKEnqueued, 4, t)
-}
-func TestAllHeadWithFetchError(t *testing.T) {
-	var calledWithHead int
-	var calledWithoutHead int
-
-	ff := newFileFetcher()
-
-	spy := newSpyExtenderFunc(eMKFetch, func(u *url.URL, userAgent string, headRequest bool) (res *http.Response, err error) {
-		if headRequest {
-			calledWithHead += 1
-		} else {
-			calledWithoutHead += 1
-		}
-		if u.Path == "/unknown.html" {
-			return nil, errors.New("Forced error")
-		}
-		return ff.Fetch(u, userAgent, headRequest)
-	})
-
-	opts := NewOptions(spy)
-	opts.SameHostOnly = true
-	opts.CrawlDelay = DefaultTestCrawlDelay
-	opts.HeadBeforeGet = true
-	opts.LogFlags = LogError | LogIgnored
-	c := NewCrawlerWithOptions(opts)
-	c.Run("http://hostb/page1.html")
-
-	// Head should be = 3 (page1, 2, unknown), Get should be = 3 (robots, page1, 2)
-	if calledWithHead != (calledWithoutHead) {
-		t.Fatalf("Expected HEAD requests %d to be equal to GET requests %d.", calledWithHead, calledWithoutHead)
-	}
-	assertCallCount(spy, eMKFetch, 6, t) // Once for robots.txt and unkwown.html, twice each for page1,2
-	assertCallCount(spy, eMKRequestGet, 2, t)
-	assertCallCount(spy, eMKEnqueued, 4, t)
-}
-func TestRequestGetFalse(t *testing.T) {
-	var calledWithHead int
-	var calledWithoutHead int
-
-	ff := newFileFetcher()
-
-	spy := newSpyExtenderFunc(eMKFetch, func(u *url.URL, userAgent string, headRequest bool) (res *http.Response, err error) {
-		if headRequest {
-			calledWithHead += 1
-		} else {
-			calledWithoutHead += 1
-		}
-		return ff.Fetch(u, userAgent, headRequest)
-	})
-
-	spy.setExtensionMethod(eMKRequestGet, func(headRes *http.Response) bool {
-		if headRes.Request.URL.Path == "/page2.html" {
-			return false
-		}
-		return true
-	})
-
-	opts := NewOptions(spy)
-	opts.SameHostOnly = true
-	opts.CrawlDelay = DefaultTestCrawlDelay
-	opts.HeadBeforeGet = true
-	opts.LogFlags = LogError | LogIgnored
-	c := NewCrawlerWithOptions(opts)
-	c.Run("http://hosta/page1.html")
-
-	if calledWithHead != calledWithoutHead {
-		// 3 GET: robots, page1, page3; 3 HEAD: page1, page2, page3
-		t.Fatalf("Expected HEAD requests %d to be equal to GET requests %d.", calledWithHead, calledWithoutHead)
-	}
-	assertCallCount(spy, eMKFetch, 6, t) // Once for robots.txt and page2, twice each for page1 and page3
-	assertCallCount(spy, eMKRequestGet, 3, t)
-	assertCallCount(spy, eMKEnqueued, 4, t)
-	assertCallCount(spy, eMKVisit, 2, t)
-}
-func TestHeadTrueFilterOverride(t *testing.T) {
-	var calledWithHead int
-	var calledWithoutHead int
-
-	ff := newFileFetcher()
-	spy := newSpyExtenderFunc(eMKFetch, func(u *url.URL, userAgent string, headRequest bool) (res *http.Response, err error) {
-		if headRequest {
-			calledWithHead += 1
-		} else {
-			calledWithoutHead += 1
-		}
-		return ff.Fetch(u, userAgent, headRequest)
-	})
-
-	// Page2: No get, Page3: No enqueue
-	spy.setExtensionMethod(eMKFilter, func(u *url.URL, from *url.URL, isVisited bool, o EnqueueOrigin) (enqueue bool, priority int, headRequest HeadRequestMode) {
-		if u.Path == "/page2.html" {
-			return !isVisited, 0, HrmIgnore
-		} else if u.Path == "/page3.html" {
-			return false, 0, HrmDefault
-		}
-		return !isVisited, 0, HrmDefault
-	})
-
-	opts := NewOptions(spy)
-	opts.SameHostOnly = true
-	opts.CrawlDelay = DefaultTestCrawlDelay
-	opts.HeadBeforeGet = true
-	opts.LogFlags = LogAll
-	c := NewCrawlerWithOptions(opts)
-	c.Run("http://hosta/page1.html")
-
-	// 3 GET: robots, page1, page2; 1 HEAD: page1
-	if calledWithHead != 1 {
-		t.Fatalf("Expected 1 HEAD requests, got %d.", calledWithHead)
-	}
-	if calledWithoutHead != 3 {
-		t.Fatalf("Expected 3 GET requests, got %d.", calledWithoutHead)
-	}
-	assertCallCount(spy, eMKFetch, 4, t)      // Once for robots.txt and page2, twice each for page1
-	assertCallCount(spy, eMKRequestGet, 1, t) // Page1 only, page2 ignored HEAD
-	assertCallCount(spy, eMKEnqueued, 3, t)   // Page1-2 and robots
-}
-func TestHeadFalseFilterOverride(t *testing.T) {
-	var calledWithHead int
-	var calledWithoutHead int
-
-	ff := newFileFetcher()
-	spy := newSpyExtenderFunc(eMKFetch, func(u *url.URL, userAgent string, headRequest bool) (res *http.Response, err error) {
-		if headRequest {
-			calledWithHead += 1
-		} else {
-			calledWithoutHead += 1
-		}
-		return ff.Fetch(u, userAgent, headRequest)
-	})
-
-	// Page1: default, Page2: Head before get, Page3: No enqueue
-	spy.setExtensionMethod(eMKFilter, func(u *url.URL, from *url.URL, isVisited bool, o EnqueueOrigin) (enqueue bool, priority int, headRequest HeadRequestMode) {
-		if u.Path == "/page2.html" {
-			return !isVisited, 0, HrmRequest
-		} else if u.Path == "/page3.html" {
-			return false, 0, HrmDefault
-		}
-		return !isVisited, 0, HrmDefault
-	})
-
-	opts := NewOptions(spy)
-	opts.SameHostOnly = true
-	opts.CrawlDelay = DefaultTestCrawlDelay
-	opts.HeadBeforeGet = false
-	opts.LogFlags = LogAll
-	c := NewCrawlerWithOptions(opts)
-	c.Run("http://hosta/page1.html")
-
-	// 3 GET: robots, page1, page2; 1 HEAD: page2
-	if calledWithHead != 1 {
-		t.Fatalf("Expected 1 HEAD requests, got %d.", calledWithHead)
-	}
-	if calledWithoutHead != 3 {
-		t.Fatalf("Expected 3 GET requests, got %d.", calledWithoutHead)
-	}
-	assertCallCount(spy, eMKFetch, 4, t)      // Once for robots.txt and page1, twice for page2
-	assertCallCount(spy, eMKRequestGet, 1, t) // Page2 only, page1 ignored HEAD
-	assertCallCount(spy, eMKEnqueued, 3, t)   // Page1-2 and robots
-}
 func TestCrawlDelay(t *testing.T) {
 	var last time.Time
 	var since []time.Duration

@@ -30,7 +30,7 @@ func assertLog(nm string, buf bytes.Buffer, s string, in bool, t *testing.T) {
 	}
 }
 
-func assertCallCount(spy callCounter, nm string, key extensionMethodKey, i int64, t *testing.T) {
+func assertCallCount(spy *spyExtender, nm string, key extensionMethodKey, i int, t *testing.T) {
 	cnt := spy.getCallCount(key)
 	if cnt != i {
 		t.Errorf("FAIL %s - expected %d calls to %s, got %d.", nm, i, key, cnt)

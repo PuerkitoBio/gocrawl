@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"github.com/PuerkitoBio/goquery"
 	"net/http"
+	"reflect"
 	"sync"
 	"time"
 )
@@ -46,14 +47,13 @@ var (
 	}
 )
 
+// Type and unique value to identify a called-with argument position to ignore.
+type ignoredCalledWithArg int
+
+const __ ignoredCalledWithArg = -1
+
 func (this extensionMethodKey) String() string {
 	return lookupEmk[this]
-}
-
-// callCounter interface implemented by the Spy Extender.
-type callCounter interface {
-	getCallCount(extensionMethodKey) int64
-	incCallCount(extensionMethodKey, int64)
 }
 
 // The spy extender adds counting the number of calls for each extender method,
@@ -61,8 +61,9 @@ type callCounter interface {
 type spyExtender struct {
 	Extender
 	useLogBuffer bool
-	callCount    map[extensionMethodKey]int64
+	callCount    map[extensionMethodKey]int
 	methods      map[extensionMethodKey]interface{}
+	calledWith   map[extensionMethodKey][][]interface{}
 	b            bytes.Buffer
 	m            sync.RWMutex
 	EnqueueChan  chan<- interface{} // Redefine here, not accessible on DefaultExtender
@@ -72,8 +73,9 @@ func newSpy(ext Extender, useLogBuffer bool) *spyExtender {
 	return &spyExtender{
 		ext,
 		useLogBuffer,
-		make(map[extensionMethodKey]int64, eMKLast),
+		make(map[extensionMethodKey]int, eMKLast),
 		make(map[extensionMethodKey]interface{}, 2),
+		make(map[extensionMethodKey][][]interface{}, eMKLast),
 		bytes.Buffer{},
 		sync.RWMutex{},
 		nil,
@@ -86,16 +88,51 @@ func (this *spyExtender) setExtensionMethod(key extensionMethodKey, f interface{
 	this.methods[key] = f
 }
 
-func (this *spyExtender) getCallCount(key extensionMethodKey) int64 {
+func (this *spyExtender) getCallCount(key extensionMethodKey) int {
 	this.m.RLock()
 	defer this.m.RUnlock()
 	return this.callCount[key]
 }
 
-func (this *spyExtender) incCallCount(key extensionMethodKey, delta int64) {
+func (this *spyExtender) registerCall(key extensionMethodKey, args ...interface{}) {
 	this.m.Lock()
 	defer this.m.Unlock()
-	this.callCount[key] += delta
+
+	// Increment call count
+	this.callCount[key] += 1
+
+	// Register called-with arguments
+	data, _ := this.calledWith[key]
+	data = append(data, args)
+	this.calledWith[key] = data
+}
+
+func (this *spyExtender) getCalledWithCount(key extensionMethodKey, args ...interface{}) int {
+	this.m.RLock()
+	defer this.m.RUnlock()
+	calls := this.calledWith[key]
+	cnt := 0
+	for _, calledArgs := range calls {
+		if isCalledWith(calledArgs, args) {
+			cnt++
+		}
+	}
+	return cnt
+}
+
+func isCalledWith(actual, compare []interface{}) bool {
+	if len(actual) != len(compare) {
+		return false
+	}
+	for i, v := range actual {
+		if compare[i] == __ {
+			continue
+		}
+		if !reflect.DeepEqual(v, compare[i]) {
+			return false
+		}
+	}
+	return true
 }
 
 func (this *spyExtender) Log(logFlags LogFlags, msgLevel LogFlags, msg string) {
@@ -108,8 +145,8 @@ func (this *spyExtender) Log(logFlags LogFlags, msgLevel LogFlags, msg string) {
 	}
 }
 
-func (this *spyExtender) Visit(ctx *URLContext, res *http.Response, doc *goquery.Document) (harvested interface{}, findLinks bool) {
-	this.incCallCount(eMKVisit, 1)
+func (this *spyExtender) Visit(ctx *URLContext, res *http.Response, doc *goquery.Document) (interface{}, bool) {
+	this.registerCall(eMKVisit, ctx, res, doc)
 	if f, ok := this.methods[eMKVisit].(func(*URLContext, *http.Response, *goquery.Document) (interface{}, bool)); ok {
 		return f(ctx, res, doc)
 	}
@@ -117,7 +154,7 @@ func (this *spyExtender) Visit(ctx *URLContext, res *http.Response, doc *goquery
 }
 
 func (this *spyExtender) Filter(ctx *URLContext, isVisited bool) bool {
-	this.incCallCount(eMKFilter, 1)
+	this.registerCall(eMKFilter, ctx, isVisited)
 	if f, ok := this.methods[eMKFilter].(func(*URLContext, bool) bool); ok {
 		return f(ctx, isVisited)
 	}
@@ -125,7 +162,7 @@ func (this *spyExtender) Filter(ctx *URLContext, isVisited bool) bool {
 }
 
 func (this *spyExtender) Start(seeds interface{}) interface{} {
-	this.incCallCount(eMKStart, 1)
+	this.registerCall(eMKStart, seeds)
 	if f, ok := this.methods[eMKStart].(func(interface{}) interface{}); ok {
 		return f(seeds)
 	}
@@ -133,7 +170,7 @@ func (this *spyExtender) Start(seeds interface{}) interface{} {
 }
 
 func (this *spyExtender) End(err error) {
-	this.incCallCount(eMKEnd, 1)
+	this.registerCall(eMKEnd, err)
 	if f, ok := this.methods[eMKEnd].(func(error)); ok {
 		f(err)
 		return
@@ -142,7 +179,7 @@ func (this *spyExtender) End(err error) {
 }
 
 func (this *spyExtender) Error(err *CrawlError) {
-	this.incCallCount(eMKError, 1)
+	this.registerCall(eMKError, err)
 	if f, ok := this.methods[eMKError].(func(*CrawlError)); ok {
 		f(err)
 		return
@@ -151,7 +188,7 @@ func (this *spyExtender) Error(err *CrawlError) {
 }
 
 func (this *spyExtender) ComputeDelay(host string, di *DelayInfo, lastFetch *FetchInfo) time.Duration {
-	this.incCallCount(eMKComputeDelay, 1)
+	this.registerCall(eMKComputeDelay, host, di, lastFetch)
 	if f, ok := this.methods[eMKComputeDelay].(func(string, *DelayInfo, *FetchInfo) time.Duration); ok {
 		return f(host, di, lastFetch)
 	}
@@ -159,7 +196,7 @@ func (this *spyExtender) ComputeDelay(host string, di *DelayInfo, lastFetch *Fet
 }
 
 func (this *spyExtender) Fetch(ctx *URLContext, userAgent string, headRequest bool) (*http.Response, error) {
-	this.incCallCount(eMKFetch, 1)
+	this.registerCall(eMKFetch, ctx, userAgent, headRequest)
 	if f, ok := this.methods[eMKFetch].(func(*URLContext, string, bool) (*http.Response, error)); ok {
 		return f(ctx, userAgent, headRequest)
 	}
@@ -167,7 +204,7 @@ func (this *spyExtender) Fetch(ctx *URLContext, userAgent string, headRequest bo
 }
 
 func (this *spyExtender) RequestRobots(ctx *URLContext, robotAgent string) (data []byte, doRequest bool) {
-	this.incCallCount(eMKRequestRobots, 1)
+	this.registerCall(eMKRequestRobots, ctx, robotAgent)
 	if f, ok := this.methods[eMKRequestRobots].(func(*URLContext, string) ([]byte, bool)); ok {
 		return f(ctx, robotAgent)
 	}
@@ -175,7 +212,7 @@ func (this *spyExtender) RequestRobots(ctx *URLContext, robotAgent string) (data
 }
 
 func (this *spyExtender) RequestGet(ctx *URLContext, headRes *http.Response) bool {
-	this.incCallCount(eMKRequestGet, 1)
+	this.registerCall(eMKRequestGet, ctx, headRes)
 	if f, ok := this.methods[eMKRequestGet].(func(*URLContext, *http.Response) bool); ok {
 		return f(ctx, headRes)
 	}
@@ -183,7 +220,7 @@ func (this *spyExtender) RequestGet(ctx *URLContext, headRes *http.Response) boo
 }
 
 func (this *spyExtender) FetchedRobots(ctx *URLContext, res *http.Response) {
-	this.incCallCount(eMKFetchedRobots, 1)
+	this.registerCall(eMKFetchedRobots, ctx, res)
 	if f, ok := this.methods[eMKFetchedRobots].(func(*URLContext, *http.Response)); ok {
 		f(ctx, res)
 		return
@@ -192,7 +229,7 @@ func (this *spyExtender) FetchedRobots(ctx *URLContext, res *http.Response) {
 }
 
 func (this *spyExtender) Enqueued(ctx *URLContext) {
-	this.incCallCount(eMKEnqueued, 1)
+	this.registerCall(eMKEnqueued, ctx)
 	if f, ok := this.methods[eMKEnqueued].(func(*URLContext)); ok {
 		f(ctx)
 		return
@@ -201,7 +238,7 @@ func (this *spyExtender) Enqueued(ctx *URLContext) {
 }
 
 func (this *spyExtender) Visited(ctx *URLContext, harvested interface{}) {
-	this.incCallCount(eMKVisited, 1)
+	this.registerCall(eMKVisited, ctx, harvested)
 	if f, ok := this.methods[eMKVisited].(func(*URLContext, interface{})); ok {
 		f(ctx, harvested)
 		return
@@ -210,7 +247,7 @@ func (this *spyExtender) Visited(ctx *URLContext, harvested interface{}) {
 }
 
 func (this *spyExtender) Disallowed(ctx *URLContext) {
-	this.incCallCount(eMKDisallowed, 1)
+	this.registerCall(eMKDisallowed, ctx)
 	if f, ok := this.methods[eMKDisallowed].(func(*URLContext)); ok {
 		f(ctx)
 		return
