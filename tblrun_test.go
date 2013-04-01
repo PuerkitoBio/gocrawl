@@ -6,6 +6,11 @@ import (
 	"testing"
 )
 
+var (
+	// Global variable for the in-context of the test case generic assert function.
+	assertTrue func(bool, string, ...interface{}) bool
+)
+
 func TestRunner(t *testing.T) {
 	var singleTC *testCase
 

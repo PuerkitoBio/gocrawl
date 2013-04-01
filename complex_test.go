@@ -3,6 +3,7 @@ package gocrawl
 import (
 	"net"
 	"net/http"
+	"net/url"
 	"strings"
 	"testing"
 	"time"
@@ -149,6 +150,112 @@ func TestRunTwiceSameInstance(t *testing.T) {
 
 	assertCallCount(spy, "RunTwiceSameInstance", eMKVisit, 3, t)
 	assertCallCount(spy, "RunTwiceSameInstance", eMKFilter, 11, t)
+}
+
+func TestEnqueueChanEmbedded(t *testing.T) {
+	type MyExt struct {
+		SomeFieldBefore bool
+		*DefaultExtender
+		SomeFieldAfter int
+	}
+	me := &MyExt{false, new(DefaultExtender), 0}
+	c := NewCrawler(me)
+	if me.EnqueueChan != nil {
+		t.Error("expected EnqueueChan to be nil")
+	}
+
+	c.Run(nil)
+
+	if me.EnqueueChan == nil {
+		t.Error("expected EnqueueChan to be non-nil")
+	}
+	me.EnqueueChan <- "test"
+	if l := len(me.EnqueueChan); l != 1 {
+		t.Errorf("expected EnqueueChan to have 1 element, got %d", l)
+	}
+}
+
+func TestEnqueueChanShadowed(t *testing.T) {
+	type ShadowExt struct {
+		*spyExtender
+		EnqueueChan int
+	}
+	me := &ShadowExt{
+		newSpy(new(DefaultExtender), true),
+		0,
+	}
+	opts := NewOptions(me)
+	opts.LogFlags = LogInfo
+	c := NewCrawlerWithOptions(opts)
+
+	c.Run("")
+
+	assertIsInLog("EnqueueChanShadowed", me.b, "extender.EnqueueChan is not of type chan<-interface{}, cannot set the enqueue channel\n", t)
+}
+
+func TestEnqueueNewUrl(t *testing.T) {
+	ff := newFileFetcher()
+	spy := newSpy(ff, true)
+	spy.setExtensionMethod(eMKFilter, func(ctx *URLContext, isVisited bool) bool {
+		// Accept only non-visited Page1s
+		return !isVisited && strings.HasSuffix(strings.ToLower(ctx.url.Path), "page1.html")
+	})
+	enqueued := false
+	spy.setExtensionMethod(eMKEnqueued, func(ctx *URLContext) {
+		// Add hostc's Page1 to crawl
+		if !enqueued {
+			newU, err := url.Parse("http://hostc/page1.html")
+			if err != nil {
+				panic(err)
+			}
+			spy.EnqueueChan <- newU
+			enqueued = true
+		}
+	})
+
+	opts := NewOptions(spy)
+	opts.CrawlDelay = DefaultTestCrawlDelay
+	opts.LogFlags = LogAll
+	opts.SameHostOnly = false
+	c := NewCrawlerWithOptions(opts)
+
+	c.Run("http://hostb/page1.html")
+
+	assertCallCount(spy, "EnqueueNewUrl", eMKFilter, 7, t)
+	assertCallCount(spy, "EnqueueNewUrl", eMKEnqueued, 4, t) // robots.txt * 2, both Page1s
+}
+
+func TestEnqueueNewUrlOnError(t *testing.T) {
+	ff := newFileFetcher()
+	spy := newSpy(ff, true)
+	spy.setExtensionMethod(eMKFilter, func(ctx *URLContext, isVisited bool) bool {
+		// If is visited, but has a state of "Error", allow
+		st, ok := ctx.State.(string)
+		if isVisited && ok && st == "Error" {
+			return true
+		}
+		// Accept only non-visited by default
+		return !isVisited
+	})
+	once := false
+	spy.setExtensionMethod(eMKError, func(err *CrawlError) {
+		if err.Kind == CekFetch && !once {
+			// On error, reenqueue once only
+			once = true
+			spy.EnqueueChan <- map[*url.URL]interface{}{
+				err.Ctx.url: "Error",
+			}
+		}
+	})
+
+	opts := NewOptions(spy)
+	opts.LogFlags = LogAll
+	opts.CrawlDelay = DefaultTestCrawlDelay
+	c := NewCrawlerWithOptions(opts)
+	c.Run("http://hosta/page6.html") // Page6 does not exist, that's the goal, generate an error
+
+	assertCallCount(spy, "EnqueueNewUrlOnError", eMKFilter, 2, t)   // First pass and re-enqueued from error
+	assertCallCount(spy, "EnqueueNewUrlOnError", eMKEnqueued, 3, t) // Twice and robots.txt
 }
 
 // TODO : Test to assert low CPU usage during long crawl delay waits? (issue #12)

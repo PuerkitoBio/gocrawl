@@ -19,7 +19,6 @@ var (
 type CrawlErrorKind uint8
 
 const (
-	// TODO : Check if still all required
 	CekFetch CrawlErrorKind = iota
 	CekParseRobots
 	CekHttpStatusCode

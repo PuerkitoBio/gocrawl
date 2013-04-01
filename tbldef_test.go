@@ -29,9 +29,6 @@ type testCase struct {
 }
 
 var (
-	// Global variable for the in-context of the test case generic assert function.
-	assertTrue func(bool, string, ...interface{}) bool
-
 	// Actual definition of test cases.
 	// Prefix name with "*" to run this single starred test.
 	// Prefix name with "!" to ignore this test.
