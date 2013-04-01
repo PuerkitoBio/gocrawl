@@ -76,7 +76,7 @@ func (this *Crawler) toURLContexts(raw interface{}, src *url.URL) []*URLContext 
 		// Convert a single string URL to an URLContext
 		ctx, err := this.stringToURLContext(v, src)
 		if err != nil {
-			this.Options.Extender.Error(newCrawlError(nil, err, CekParseSeed))
+			this.Options.Extender.Error(newCrawlError(nil, err, CekParseURL))
 			this.logFunc(LogError, "ERROR parsing URL %s", v)
 		} else {
 			res = []*URLContext{ctx}
@@ -88,8 +88,8 @@ func (this *Crawler) toURLContexts(raw interface{}, src *url.URL) []*URLContext 
 		for _, s := range v {
 			ctx, err := this.stringToURLContext(s, src)
 			if err != nil {
-				this.Options.Extender.Error(newCrawlError(nil, err, CekParseSeed))
-				this.logFunc(LogError, "ERROR parsing seed %s", s)
+				this.Options.Extender.Error(newCrawlError(nil, err, CekParseURL))
+				this.logFunc(LogError, "ERROR parsing URL %s", s)
 			} else {
 				res = append(res, ctx)
 			}
@@ -109,8 +109,8 @@ func (this *Crawler) toURLContexts(raw interface{}, src *url.URL) []*URLContext 
 		for s, st := range v {
 			ctx, err := this.stringToURLContext(s, src)
 			if err != nil {
-				this.Options.Extender.Error(newCrawlError(nil, err, CekParseSeed))
-				this.logFunc(LogError, "ERROR parsing seed %s", s)
+				this.Options.Extender.Error(newCrawlError(nil, err, CekParseURL))
+				this.logFunc(LogError, "ERROR parsing URL %s", s)
 			} else {
 				ctx.State = st
 				res = append(res, ctx)

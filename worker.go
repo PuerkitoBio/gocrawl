@@ -236,7 +236,7 @@ func (this *worker) fetchUrl(ctx *URLContext, agent string, headRequest bool) (r
 					// Absolute URLs that point to another host are ok too.
 					if ur, e := ctx.url.Parse(ue.URL); e != nil {
 						// Notify error
-						this.opts.Extender.Error(newCrawlError(nil, e, CekParseRedirectUrl))
+						this.opts.Extender.Error(newCrawlError(nil, e, CekParseRedirectURL))
 						this.logFunc(LogError, "ERROR parsing redirect URL %s: %s", ue.URL, e)
 					} else {
 						// Enqueue the redirect-to URL

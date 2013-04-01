@@ -15,6 +15,38 @@ var (
 	ErrMaxVisits = errors.New("the maximum number of visits is reached")
 )
 
+// Enum indicating the kind of the crawling error.
+type CrawlErrorKind uint8
+
+const (
+	// TODO : Check if still all required
+	CekFetch CrawlErrorKind = iota
+	CekParseRobots
+	CekHttpStatusCode
+	CekReadBody
+	CekParseBody
+	CekParseURL
+	CekProcessLinks
+	CekParseRedirectURL
+)
+
+var (
+	lookupCek = [...]string{
+		CekFetch:            "Fetch",
+		CekParseRobots:      "ParseRobots",
+		CekHttpStatusCode:   "HttpStatusCode",
+		CekReadBody:         "ReadBody",
+		CekParseBody:        "ParseBody",
+		CekParseURL:         "ParseURL",
+		CekProcessLinks:     "ProcessLinks",
+		CekParseRedirectURL: "ParseRedirectURL",
+	}
+)
+
+func (this CrawlErrorKind) String() string {
+	return lookupCek[this]
+}
+
 // Crawl error information.
 type CrawlError struct {
 	Ctx  *URLContext

@@ -309,15 +309,16 @@ var (
 		&testCase{
 			name: "SameHostPolicyWithNormalizedSourceUrl-i13",
 			opts: &Options{
-				SameHostOnly: true,
-				CrawlDelay:   DefaultTestCrawlDelay,
-				LogFlags:     LogAll,
+				SameHostOnly:          true,
+				CrawlDelay:            DefaultTestCrawlDelay,
+				URLNormalizationFlags: DefaultNormalizationFlags,
+				LogFlags:              LogAll,
 			},
 			seeds: []string{
 				"http://www.hosta/page1.html",
 			},
 			funcs: f{
-				eMKVisit: func(ctx *URLContext, res *http.Response, doc *goquery.Document) (harvested interface{}, findLinks bool) {
+				eMKVisit: func(ctx *URLContext, res *http.Response, doc *goquery.Document) (interface{}, bool) {
 					if res.Request.URL.Path == "/page1.html" {
 						u, err := res.Request.URL.Parse("page2.html")
 						if err != nil {
@@ -332,6 +333,235 @@ var (
 				eMKDisallowed: 0,
 				eMKFilter:     2, // page1, page2
 				eMKVisit:      2, // page1, page2
+			},
+		},
+
+		&testCase{
+			name: "SameHostPolicyRejectWithNormalizedSourceUrl-i13",
+			opts: &Options{
+				SameHostOnly:          true,
+				CrawlDelay:            DefaultTestCrawlDelay,
+				LogFlags:              LogAll,
+				URLNormalizationFlags: DefaultNormalizationFlags,
+			},
+			seeds: []string{
+				"http://www.hosta/page1.html",
+			},
+			funcs: f{
+				eMKVisit: func(ctx *URLContext, res *http.Response, doc *goquery.Document) (interface{}, bool) {
+					if res.Request.URL.Host == "www.hosta" {
+						u, err := url.Parse("http://www.hostb/page1.html")
+						if err != nil {
+							panic(err)
+						}
+						return u, false
+					}
+					return nil, false
+				},
+			},
+			asserts: a{
+				eMKFilter: 2, // hosta/page1, hostb/page1
+				eMKVisit:  1, // hosta/page1
+			},
+			logAsserts: []string{
+				"ignore on same host policy: http://hostb/page1.html",
+			},
+		},
+
+		&testCase{
+			name: "ReadBodyInVisitor",
+			opts: &Options{
+				SameHostOnly:          true,
+				CrawlDelay:            DefaultTestCrawlDelay,
+				MaxVisits:             1,
+				LogFlags:              LogAll,
+				URLNormalizationFlags: DefaultNormalizationFlags,
+			},
+			seeds: []string{
+				"http://hostc/page3.html",
+			},
+			funcs: f{
+				eMKVisit: func(ctx *URLContext, res *http.Response, doc *goquery.Document) (interface{}, bool) {
+					b, err := ioutil.ReadAll(res.Body)
+					if assertTrue(err == nil, "%s", err) {
+						assertTrue(len(b) > 0, "expected some content in the body")
+					}
+					return nil, false
+				},
+			},
+		},
+
+		&testCase{
+			name: "EndReasonMaxVisits",
+			opts: &Options{
+				SameHostOnly: true,
+				CrawlDelay:   DefaultTestCrawlDelay,
+				MaxVisits:    1,
+				LogFlags:     LogAll,
+			},
+			seeds: []string{
+				"http://hosta/page1.html",
+			},
+			funcs: f{
+				eMKEnd: func(err error) {
+					assertTrue(err == ErrMaxVisits, "expected error to be ErrMaxVisits")
+				},
+			},
+			asserts: a{
+				eMKEnd: 1,
+			},
+		},
+
+		&testCase{
+			name: "EndReasonDone",
+			opts: &Options{
+				SameHostOnly: true,
+				CrawlDelay:   DefaultTestCrawlDelay,
+				LogFlags:     LogAll,
+			},
+			seeds: []string{
+				"http://hosta/page5.html",
+			},
+			funcs: f{
+				eMKEnd: func(err error) {
+					assertTrue(err == nil, "expected error to be nil")
+				},
+			},
+			asserts: a{
+				eMKEnd: 1,
+			},
+		},
+
+		&testCase{
+			name: "ErrorFetch",
+			opts: &Options{
+				SameHostOnly: true,
+				CrawlDelay:   DefaultTestCrawlDelay,
+				LogFlags:     LogAll,
+			},
+			seeds: []string{
+				"http://hostb/page2.html", // Will try to load pageunknown.html
+			},
+			funcs: f{
+				eMKError: func(err *CrawlError) {
+					assertTrue(err.Kind == CekFetch, "expected error to be of kind %s, got %s", CekFetch, err.Kind)
+				},
+			},
+			asserts: a{
+				eMKError: 1,
+			},
+		},
+
+		&testCase{
+			name: "NonHtmlRequest",
+			http: true,
+			opts: &Options{
+				SameHostOnly: true,
+				CrawlDelay:   DefaultTestCrawlDelay,
+				LogFlags:     LogAll,
+			},
+			seeds: []string{
+				"https://lh4.googleusercontent.com/-v0soe-ievYE/AAAAAAAAAAI/AAAAAAAAs7Y/_UbxpxC-VG0/photo.jpg",
+			},
+			asserts: a{
+				eMKError: 0,
+				eMKVisit: 1,
+			},
+		},
+
+		&testCase{
+			name: "InvalidSeed",
+			opts: &Options{
+				SameHostOnly: true,
+				CrawlDelay:   DefaultTestCrawlDelay,
+				LogFlags:     LogAll,
+			},
+			seeds: []string{
+				"#toto",
+			},
+			asserts: a{
+				eMKError: 1,
+				eMKVisit: 0,
+			},
+			logAsserts: []string{
+				"ERROR parsing URL #toto\n",
+			},
+		},
+
+		&testCase{
+			name: "HostCount",
+			opts: &Options{
+				SameHostOnly: true,
+				CrawlDelay:   DefaultTestCrawlDelay,
+				LogFlags:     LogAll,
+			},
+			seeds: []string{
+				"ftp://roota/a", // Use FTP scheme so that it doesn't actually attempt a fetch
+				"ftp://roota/b",
+				"ftp://rootb/c",
+			},
+			asserts: a{
+				eMKVisit: 0,
+			},
+			logAsserts: []string{
+				"init() - host count: 2\n",
+				"init() - seeds length: 3\n",
+			},
+		},
+
+		&testCase{
+			name: "CustomFilterNoURL",
+			opts: &Options{
+				SameHostOnly: true,
+				CrawlDelay:   DefaultTestCrawlDelay,
+				LogFlags:     LogAll,
+			},
+			seeds: []string{
+				"http://test1",
+				"http://test2",
+			},
+			funcs: f{
+				eMKFilter: func(ctx *URLContext, isVisited bool) bool {
+					return false
+				},
+			},
+			asserts: a{
+				eMKVisit:  0,
+				eMKFilter: 2,
+			},
+			logAsserts: []string{
+				"ignore on filter policy: http://test1\n",
+				"ignore on filter policy: http://test2\n",
+			},
+		},
+
+		&testCase{
+			name: "NoSeed",
+			opts: &Options{
+				SameHostOnly: true,
+				CrawlDelay:   DefaultTestCrawlDelay,
+				LogFlags:     LogAll,
+			},
+			seeds: nil,
+			asserts: a{
+				eMKVisit:  0,
+				eMKFilter: 0,
+				eMKError:  0,
+			},
+		},
+
+		&testCase{
+			name: "NoVisitorFunc",
+			opts: &Options{
+				SameHostOnly: true,
+				CrawlDelay:   DefaultTestCrawlDelay,
+				LogFlags:     LogAll,
+			},
+			seeds: "http://hosta/page1.html",
+			asserts: a{
+				eMKVisit:  3, // With default Filter and Visit, will visit all same-host links
+				eMKFilter: 10,
+				eMKError:  0,
 			},
 		},
 
@@ -470,126 +700,6 @@ func runTestCase(t *testing.T, tc *testCase) {
 // TODO : Test Panic in visit, filter, etc.
 // TODO : Test state with URL, various types supported as interface{} for seeds and harvested
 /*
-// Test issue #13
-func TestSameHostPolicyRejectWithNormalizedSourceUrl(t *testing.T) {
-	spy := newSpyExtenderFunc(eMKVisit, func(res *http.Response, doc *goquery.Document) ([]*url.URL, bool) {
-		if res.Request.URL.Host == "www.hosta" {
-			u, err := url.Parse("http://www.hostb/page1.html")
-			if err != nil {
-				panic(err)
-			}
-			return []*url.URL{u}, false
-		}
-		return nil, false
-	})
-	spy.useLogBuffer = true
-
-	opts := NewOptions(spy)
-	opts.SameHostOnly = true
-	opts.CrawlDelay = DefaultTestCrawlDelay
-	opts.LogFlags = LogAll
-	c := NewCrawlerWithOptions(opts)
-	c.Run("http://www.hosta/page1.html")
-
-	// Robots don't trigger Filter nor Visit
-	assertCallCount(spy, eMKFilter, 2, t) // hosta/page1, hostb/page1
-	assertCallCount(spy, eMKVisit, 1, t)  // hosta/page1
-	str := "ignore on same host policy: http://hostb/page1.html"
-	assertIsInLog(spy.b, str, t)
-}
-func TestRunTwiceSameInstance(t *testing.T) {
-	spy := newSpyExtenderConfigured(0, nil, true, 0, "*")
-
-	opts := NewOptions(spy)
-	opts.SameHostOnly = true
-	opts.CrawlDelay = DefaultTestCrawlDelay
-	opts.LogFlags = LogNone
-	c := NewCrawlerWithOptions(opts)
-	c.Run("http://hosta/page1.html", "http://hosta/page4.html")
-
-	assertCallCount(spy, eMKVisit, 5, t)
-	assertCallCount(spy, eMKFilter, 13, t)
-
-	spy = newSpyExtenderConfigured(0, nil, true, 0, "http://hosta/page1.html", "http://hostb/page1.html", "http://hostc/page1.html", "http://hostd/page1.html")
-	opts.SameHostOnly = false
-	opts.Extender = spy
-	c.Run("http://hosta/page1.html", "http://hosta/page4.html", "http://hostb/pageunlinked.html")
-
-	assertCallCount(spy, eMKVisit, 3, t)
-	assertCallCount(spy, eMKFilter, 11, t)
-}
-func TestReadBodyInVisitor(t *testing.T) {
-	var err error
-	var b []byte
-
-	spy := newSpyExtenderFunc(eMKVisit, func(res *http.Response, doc *goquery.Document) ([]*url.URL, bool) {
-		b, err = ioutil.ReadAll(res.Body)
-		return nil, false
-	})
-
-	c := NewCrawler(spy)
-	c.Options.CrawlDelay = DefaultTestCrawlDelay
-	c.Options.LogFlags = LogAll
-	c.Run("http://hostc/page3.html")
-
-	if err != nil {
-		t.Error(err)
-	} else if len(b) == 0 {
-		t.Error("Empty body")
-	}
-}
-func TestEndReasonMaxVisits(t *testing.T) {
-	var e EndReason
-
-	spy := newSpyExtenderFunc(eMKEnd, func(end EndReason) {
-		e = end
-	})
-	opts := NewOptions(spy)
-	opts.SameHostOnly = true
-	opts.CrawlDelay = DefaultTestCrawlDelay
-	opts.MaxVisits = 1
-	c := NewCrawlerWithOptions(opts)
-	c.Run("http://hosta/page1.html")
-
-	assertCallCount(spy, eMKEnd, 1, t)
-	if e != ErMaxVisits {
-		t.Fatalf("Expected end reason MaxVisits, got %v\n", e)
-	}
-}
-func TestEndReasonDone(t *testing.T) {
-	var e EndReason
-
-	spy := newSpyExtenderFunc(eMKEnd, func(end EndReason) {
-		e = end
-	})
-	opts := NewOptions(spy)
-	opts.SameHostOnly = true
-	opts.CrawlDelay = DefaultTestCrawlDelay
-	c := NewCrawlerWithOptions(opts)
-	c.Run("http://hosta/page5.html")
-
-	assertCallCount(spy, eMKEnd, 1, t)
-	if e != ErDone {
-		t.Fatalf("Expected end reason Done, got %v\n", e)
-	}
-}
-func TestErrorFetch(t *testing.T) {
-	var e *CrawlError
-
-	spy := newSpyExtenderFunc(eMKError, func(err *CrawlError) {
-		e = err
-	})
-	opts := NewOptions(spy)
-	opts.SameHostOnly = true
-	opts.CrawlDelay = DefaultTestCrawlDelay
-	c := NewCrawlerWithOptions(opts)
-	c.Run("http://hostb/page1.html")
-
-	assertCallCount(spy, eMKError, 1, t)
-	if e.Kind != CekFetch {
-		t.Fatalf("Expected error kind Fetch, got %v\n", e.Kind)
-	}
-}
 func TestNoHead(t *testing.T) {
 	var calledWithHead bool
 
@@ -877,5 +987,26 @@ func TestUserAgent(t *testing.T) {
 	if err = l.Close(); err != nil {
 		t.Fatal(err)
 	}
+}
+func TestRunTwiceSameInstance(t *testing.T) {
+	spy := newSpyExtenderConfigured(0, nil, true, 0, "*")
+
+	opts := NewOptions(spy)
+	opts.SameHostOnly = true
+	opts.CrawlDelay = DefaultTestCrawlDelay
+	opts.LogFlags = LogNone
+	c := NewCrawlerWithOptions(opts)
+	c.Run("http://hosta/page1.html", "http://hosta/page4.html")
+
+	assertCallCount(spy, eMKVisit, 5, t)
+	assertCallCount(spy, eMKFilter, 13, t)
+
+	spy = newSpyExtenderConfigured(0, nil, true, 0, "http://hosta/page1.html", "http://hostb/page1.html", "http://hostc/page1.html", "http://hostd/page1.html")
+	opts.SameHostOnly = false
+	opts.Extender = spy
+	c.Run("http://hosta/page1.html", "http://hosta/page4.html", "http://hostb/pageunlinked.html")
+
+	assertCallCount(spy, eMKVisit, 3, t)
+	assertCallCount(spy, eMKFilter, 11, t)
 }
 */

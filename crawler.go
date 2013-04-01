@@ -53,6 +53,9 @@ func NewCrawler(ext Extender) *Crawler {
 // or when no more URLs need visiting. If an error occurs, it is returned (if
 // MaxVisits is reached, the error ErrMaxVisits is returned).
 func (this *Crawler) Run(seeds interface{}) error {
+	// Helper log function, takes care of filtering based on level
+	this.logFunc = getLogFunc(this.Options.Extender, this.Options.LogFlags, -1)
+
 	seeds = this.Options.Extender.Start(seeds)
 	ctxs := this.toURLContexts(seeds, nil)
 	this.init(ctxs)
@@ -67,9 +70,6 @@ func (this *Crawler) Run(seeds interface{}) error {
 
 // Initialize the Crawler's internal fields before a crawling execution.
 func (this *Crawler) init(ctxs []*URLContext) {
-	// Helper log function, takes care of filtering based on level
-	this.logFunc = getLogFunc(this.Options.Extender, this.Options.LogFlags, -1)
-
 	// Initialize the internal hosts map
 	this.hosts = make(map[string]struct{}, len(ctxs))
 	for _, ctx := range ctxs {
