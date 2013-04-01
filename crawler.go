@@ -308,7 +308,7 @@ func (this *Crawler) collectUrls() error {
 				delete(this.workers, res.host)
 				this.logFunc(LogInfo, "worker for host %s cleared on idle policy", res.host)
 			} else {
-				this.enqueueUrls(this.toURLContexts(res.harvestedURLs, res.ctx.sourceURL))
+				this.enqueueUrls(this.toURLContexts(res.harvestedURLs, res.ctx.url))
 				this.pushPopRefCount--
 			}
 

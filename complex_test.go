@@ -259,3 +259,4 @@ func TestEnqueueNewUrlOnError(t *testing.T) {
 }
 
 // TODO : Test to assert low CPU usage during long crawl delay waits? (issue #12)
+// TODO : Call complex tests from runner, easier to isolate a test

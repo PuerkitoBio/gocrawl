@@ -848,6 +848,73 @@ var (
 				assertTrue(nohead == 3, "expected 3 GET requests, got %d", nohead)
 			},
 		},
+
+		&testCase{
+			name: "RedirectFilterOut",
+			http: true,
+			opts: &Options{
+				SameHostOnly: true,
+				CrawlDelay:   DefaultTestCrawlDelay,
+				LogFlags:     LogAll,
+			},
+			seeds: "http://src.ca",
+			funcs: f{
+				eMKFilter: func(ctx *URLContext, isVisited bool) bool {
+					// Accept only src.ca
+					return !isVisited && ctx.url.Host == "src.ca"
+				},
+			},
+			asserts: a{
+				eMKFilter:   2, // src.ca and radio-canada.ca
+				eMKEnqueued: 2, // src.ca and robots.txt
+				eMKFetch:    2, // src.ca and robots.txt
+				eMKVisit:    0, // src.ca redirects, so no visit
+			},
+		},
+
+		&testCase{
+			name: "RedirectFollow",
+			http: true,
+			opts: &Options{
+				SameHostOnly: false,
+				CrawlDelay:   DefaultTestCrawlDelay,
+				LogFlags:     LogAll,
+			},
+			seeds: "http://src.ca",
+			funcs: f{
+				eMKFilter: func(ctx *URLContext, isVisited bool) bool {
+					return !isVisited && ctx.sourceURL == nil
+				},
+			},
+			asserts: a{
+				eMKEnqueued: 4, // src.ca, radio-canada.ca and both robots.txt
+				eMKFetch:    4, // src.ca, radio-canada.ca and both robots.txt
+				eMKVisit:    1, // src.ca redirects, radio-canada.ca visited
+			},
+		},
+
+		&testCase{
+			name: "RedirectFollowHeadFirst",
+			http: true,
+			opts: &Options{
+				SameHostOnly:  false,
+				CrawlDelay:    DefaultTestCrawlDelay,
+				HeadBeforeGet: true,
+				LogFlags:      LogAll,
+			},
+			seeds: "http://src.ca",
+			funcs: f{
+				eMKFilter: func(ctx *URLContext, isVisited bool) bool {
+					return !isVisited && ctx.sourceURL == nil
+				},
+			},
+			asserts: a{
+				eMKEnqueued:   4, // src.ca, radio-canada.ca and both robots.txt
+				eMKRequestGet: 1, // radio-canada.ca only (no HEAD for robots, and src.ca gets redirected)
+				eMKFetch:      5, // src.ca, 2*radio-canada.ca and both robots.txt
+				eMKVisit:      1, // src.ca redirects, radio-canada.ca visited
+			},
+		},
 	}
 )
 

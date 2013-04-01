@@ -1,10 +1,8 @@
 package gocrawl
 
-/*
 import (
 	"github.com/PuerkitoBio/goquery"
 	"net/http"
-	"net/url"
 	"regexp"
 	"time"
 )
@@ -19,7 +17,7 @@ type ExampleExtender struct {
 }
 
 // Override Visit for our need.
-func (this *ExampleExtender) Visit(res *http.Response, doc *goquery.Document) ([]*url.URL, bool) {
+func (this *ExampleExtender) Visit(ctx *URLContext, res *http.Response, doc *goquery.Document) (interface{}, bool) {
 	// Use the goquery document or res.Body to manipulate the data
 	// ...
 
@@ -28,9 +26,8 @@ func (this *ExampleExtender) Visit(res *http.Response, doc *goquery.Document) ([
 }
 
 // Override Filter for our need.
-func (this *ExampleExtender) Filter(u *url.URL, src *url.URL, isVisited bool, origin EnqueueOrigin) (bool, int, HeadRequestMode) {
-	// Priority (2nd return value) is ignored at the moment
-	return !isVisited && rxOk.MatchString(u.String()), 0, HrmDefault
+func (this *ExampleExtender) Filter(ctx *URLContext, isVisited bool) bool {
+	return !isVisited && rxOk.MatchString(ctx.NormalizedURL().String())
 }
 
 func ExampleCrawl() {
@@ -50,4 +47,3 @@ func ExampleCrawl() {
 
 	// xOutput: voluntarily fail to see log output
 }
-*/
