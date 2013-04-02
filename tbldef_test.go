@@ -1,10 +1,13 @@
 package gocrawl
 
 import (
+	"fmt"
 	"github.com/PuerkitoBio/goquery"
 	"io/ioutil"
 	"net/http"
 	"net/url"
+	"regexp"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -26,6 +29,7 @@ type testCase struct {
 	asserts      a
 	logAsserts   []string
 	customAssert func(*spyExtender, *testing.T)
+	panics       bool
 	external     func(*testing.T, *testCase, bool)
 }
 
@@ -918,6 +922,105 @@ var (
 		},
 
 		&testCase{
+			name: "PanicInFilter",
+			opts: &Options{
+				SameHostOnly: true,
+				CrawlDelay:   DefaultTestCrawlDelay,
+				LogFlags:     LogAll,
+			},
+			seeds: "http://hosta/page1.html",
+			funcs: f{
+				eMKFilter: func(ctx *URLContext, isVisited bool) bool {
+					panic("error")
+				},
+			},
+			panics: true,
+		},
+
+		&testCase{
+			name: "VisitReturnsURLsWithStateUsingS",
+			opts: &Options{
+				SameHostOnly: true,
+				CrawlDelay:   DefaultTestCrawlDelay,
+				LogFlags:     LogAll,
+			},
+			seeds: "http://hosta/page1.html",
+			funcs: f{
+				eMKVisit: func(ctx *URLContext, res *http.Response, doc *goquery.Document) (interface{}, bool) {
+					if ctx.sourceURL == nil {
+						// Only when called for seed
+						return S{
+							"http://hosta/page2.html": 2,
+							"http://hosta/page3.html": 3,
+							"http://hosta/page4.html": 4,
+							"http://hosta/page5.html": 5,
+						}, false
+					} else {
+						rx := regexp.MustCompile(`/page(\d)\.html`)
+						mtch := rx.FindStringSubmatch(ctx.normalizedURL.Path)
+						i, ok := ctx.State.(int)
+						if assertTrue(ok, "expected state data to be an int for %s", ctx.normalizedURL) {
+							if page, err := strconv.Atoi(mtch[1]); err != nil {
+								panic(err)
+							} else {
+								assertTrue(page == i, "expected state for page%d.html to be %d, got %d", page, page, i)
+							}
+						}
+					}
+					return nil, false
+				},
+			},
+			asserts: a{
+				eMKFilter:   5,
+				eMKVisit:    5,
+				eMKEnqueued: 6, // 5 pages + robots
+			},
+		},
+
+		&testCase{
+			name: "VisitReturnsURLsWithStateUsingU",
+			opts: &Options{
+				SameHostOnly: true,
+				CrawlDelay:   DefaultTestCrawlDelay,
+				LogFlags:     LogAll,
+			},
+			seeds: "http://hosta/page1.html",
+			funcs: f{
+				eMKVisit: func(ctx *URLContext, res *http.Response, doc *goquery.Document) (interface{}, bool) {
+					if ctx.sourceURL == nil {
+						// Only when called for seed
+						res := make(U, 4)
+						for i := 2; i <= 5; i++ {
+							u, e := url.Parse(fmt.Sprintf("http://hosta/page%d.html", i))
+							if e != nil {
+								panic(e)
+							}
+							res[u] = i
+						}
+						return res, false
+					} else {
+						rx := regexp.MustCompile(`/page(\d)\.html`)
+						mtch := rx.FindStringSubmatch(ctx.normalizedURL.Path)
+						i, ok := ctx.State.(int)
+						if assertTrue(ok, "expected state data to be an int for %s", ctx.normalizedURL) {
+							if page, err := strconv.Atoi(mtch[1]); err != nil {
+								panic(err)
+							} else {
+								assertTrue(page == i, "expected state for page%d.html to be %d, got %d", page, page, i)
+							}
+						}
+					}
+					return nil, false
+				},
+			},
+			asserts: a{
+				eMKFilter:   5,
+				eMKVisit:    5,
+				eMKEnqueued: 6, // 5 pages + robots
+			},
+		},
+
+		&testCase{
 			name:     "NoCrawlDelay",
 			external: testNoCrawlDelay,
 		},
@@ -963,6 +1066,3 @@ var (
 		},
 	}
 )
-
-// TODO : Test Panic in visit, filter, etc.
-// TODO : Test state with URL, various types supported as interface{} for seeds and harvested

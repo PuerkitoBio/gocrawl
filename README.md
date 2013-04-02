@@ -1,5 +1,7 @@
 # gocrawl
 
+// TODO : Update README, document changes...
+
 gocrawl is a polite, slim and concurrent web crawler written in Go.
 
 ## Features

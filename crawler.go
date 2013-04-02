@@ -270,7 +270,6 @@ func (this *Crawler) enqueueUrls(ctxs []*URLContext) (cnt int) {
 // and processing these responses.
 func (this *Crawler) collectUrls() error {
 	defer func() {
-		// TODO : Log messages as exported variables?
 		this.logFunc(LogInfo, "waiting for goroutines to complete...")
 		this.wg.Wait()
 		this.logFunc(LogInfo, "crawler done.")

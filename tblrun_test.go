@@ -84,6 +84,10 @@ func runTestCase(t *testing.T, tc *testCase) {
 				spy.setExtensionMethod(emk, f)
 			}
 		}
+		if tc.panics {
+			defer assertPanic(tc.name, t)
+			assertCnt++
+		}
 
 		if err := c.Run(tc.seeds); err != nil && err != ErrMaxVisits {
 			t.Errorf("FAIL %s - %s.", tc.name, err)

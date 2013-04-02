@@ -71,6 +71,29 @@ func (this *URLContext) GetRobotsURLCtx() (*URLContext, error) {
 func (this *Crawler) toURLContexts(raw interface{}, src *url.URL) []*URLContext {
 	var res []*URLContext
 
+	mapString := func(v S) {
+		res = make([]*URLContext, 0, len(v))
+		for s, st := range v {
+			ctx, err := this.stringToURLContext(s, src)
+			if err != nil {
+				this.Options.Extender.Error(newCrawlError(nil, err, CekParseURL))
+				this.logFunc(LogError, "ERROR parsing URL %s", s)
+			} else {
+				ctx.State = st
+				res = append(res, ctx)
+			}
+		}
+	}
+
+	mapUrl := func(v U) {
+		res = make([]*URLContext, 0, len(v))
+		for u, st := range v {
+			ctx := this.urlToURLContext(u, src)
+			ctx.State = st
+			res = append(res, ctx)
+		}
+	}
+
 	switch v := raw.(type) {
 	case string:
 		// Convert a single string URL to an URLContext
@@ -104,26 +127,17 @@ func (this *Crawler) toURLContexts(raw interface{}, src *url.URL) []*URLContext 
 			res = append(res, this.urlToURLContext(u, src))
 		}
 
-	case map[string]interface{}: // TODO : Idem for type S
-		res = make([]*URLContext, 0, len(v))
-		for s, st := range v {
-			ctx, err := this.stringToURLContext(s, src)
-			if err != nil {
-				this.Options.Extender.Error(newCrawlError(nil, err, CekParseURL))
-				this.logFunc(LogError, "ERROR parsing URL %s", s)
-			} else {
-				ctx.State = st
-				res = append(res, ctx)
-			}
-		}
+	case map[string]interface{}:
+		mapString(S(v))
 
-	case map[*url.URL]interface{}: // TODO : Idem for type U
-		res = make([]*URLContext, 0, len(v))
-		for u, st := range v {
-			ctx := this.urlToURLContext(u, src)
-			ctx.State = st
-			res = append(res, ctx)
-		}
+	case S:
+		mapString(v)
+
+	case map[*url.URL]interface{}:
+		mapUrl(U(v))
+
+	case U:
+		mapUrl(v)
 	}
 	return res
 }
