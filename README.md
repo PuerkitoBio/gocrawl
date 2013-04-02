@@ -8,10 +8,10 @@ gocrawl is a polite, slim and concurrent web crawler written in Go.
 
 *    Full control over the URLs to visit, inspect and query (using a pre-initialized [goquery][] document)
 *    Crawl delays applied per host
-*    Obedience to robots.txt rules (using [robotstxt.go][robots] go library)
+*    Obedience to robots.txt rules (using the [robotstxt.go][robots] library)
 *    Concurrent execution using goroutines
 *    Configurable logging
-*    Open, customizable design by providing hooks into the execution logic
+*    Open, customizable design providing hooks into the execution logic
 
 ## Installation and dependencies
 
@@ -29,6 +29,7 @@ Once this is done, gocrawl may be installed as usual:
 
 ## Changelog
 
+*    **v0.4.0** : **BREAKING CHANGES** major refactor, API changes, see the [detailed wiki page][br04].
 *    **v0.3,2** : Fix the high CPU usage when waiting for a crawl delay.
 *    **v0.3.1** : Export the `HttpClient` variable used by the default `Fetch()` implementation (see [issue #9][i9]).
 *    **v0.3.0** : **BEHAVIOR CHANGE** filter done with normalized URL, fetch done with original, non-normalized URL (see [issue #10][i10]).
@@ -45,7 +46,6 @@ package gocrawl
 import (
   "github.com/PuerkitoBio/goquery"
   "net/http"
-  "net/url"
   "regexp"
   "time"
 )
@@ -60,7 +60,7 @@ type ExampleExtender struct {
 }
 
 // Override Visit for our need.
-func (this *ExampleExtender) Visit(res *http.Response, doc *goquery.Document) ([]*url.URL, bool) {
+func (this *ExampleExtender) Visit(ctx *URLContext, res *http.Response, doc *goquery.Document) (interface{}, bool) {
   // Use the goquery document or res.Body to manipulate the data
   // ...
 
@@ -69,9 +69,8 @@ func (this *ExampleExtender) Visit(res *http.Response, doc *goquery.Document) ([
 }
 
 // Override Filter for our need.
-func (this *ExampleExtender) Filter(u *url.URL, src *url.URL, isVisited bool, origin EnqueueOrigin) (bool, int, HeadRequestMode) {
-  // Priority (2nd return value) is ignored at the moment
-  return !isVisited && rxOk.MatchString(u.String()), 0, HrmDefault
+func (this *ExampleExtender) Filter(ctx *URLContext, isVisited bool) bool {
+  return !isVisited && rxOk.MatchString(ctx.NormalizedURL().String())
 }
 
 func ExampleCrawl() {
@@ -95,7 +94,7 @@ func ExampleCrawl() {
 
 ## API
 
-Gocrawl can be described as a minimalist web crawler (hence the "slim" tag, at <1000 sloc), providing the basic engine upon which to build a full-fledged indexing machine with caching, persistence and staleness detection logic, or to use as is for quick and easy crawling. Gocrawl itself does not attempt to detect staleness of a page, nor does it implement a caching mechanism. If an URL is enqueued to be processed, it *will* make a request to fetch it (provided it is allowed by robots.txt - hence the "polite" tag). And there is no prioritization among the URLs to process, it assumes that all enqueued URLs must be visited at some point, and that the order in which they are is unimportant - *subject to change in the future, prioritization __may__ get implemented*.
+Gocrawl can be described as a minimalist web crawler (hence the "slim" tag, at ~1000 sloc), providing the basic engine upon which to build a full-fledged indexing machine with caching, persistence and staleness detection logic, or to use as is for quick and easy crawling. Gocrawl itself does not attempt to detect staleness of a page, nor does it implement a caching mechanism. If an URL is enqueued to be processed, it *will* make a request to fetch it (provided it is allowed by robots.txt - hence the "polite" tag). And there is no prioritization among the URLs to process, it assumes that all enqueued URLs must be visited at some point, and that the order in which they are is unimportant.
 
 However, it does provide plenty of [hooks and customizations](#hc). Instead of trying to do everything and impose a way to do it, it offers ways to manipulate and adapt it to anyone's needs.
 
@@ -108,6 +107,7 @@ The major use-case behind gocrawl is to crawl some web pages while respecting th
 * **Each host spawns its own worker (goroutine)** : This makes sense since it must first read its robots.txt data, and only then proceed sequentially, one request at a time, with the specified delay between each fetch. There are no constraints inter-host, so each separate worker can crawl independently.
 * **The visitor function is called on the worker goroutine** : Again, this is ok because the crawl delay is likely bigger than the time required to parse the document, so this processing will usually *not* penalize the performance.
 * **Edge cases with no crawl delay are supported, but not optimized** : In the rare but possible event when a crawl with no delay is needed (e.g.: on your own servers, or with permission outside busy hours, etc.), gocrawl accepts a null (zero) delay, but doesn't provide optimizations. That is, there is no "special path" in the code where visitor functions are de-coupled from the worker, or where multiple workers can be launched concurrently on the same host. (In fact, if this case is your *only* use-case, I would recommend *not* to use a library at all - since there is little value in it -, and simply use Go's standard libs and fetch at will with as many goroutines as are necessary.)
+* **Extender interface provides the means to write a drop-in, fully encapsulated behaviour** : An implementation of `Extender` can radically enhance the core library, with caching, persistence, different fetching strategies, etc. This is why the `Extender.Start()` method is somewhat redundant with the `Crawler.Run()` method, `Run` allows calling the crawler as a library, while `Start` makes it possible to encapsulate the logic required to select the seed URLs into the `Extender`.
 
 Although it could probably be used to crawl a massive amount of web pages (after all, this is *fetch, visit, enqueue, repeat ad nauseam*!), most realistic (and um... tested!) use-cases should be based on a well-known, well-defined limited bucket of seeds. Distributed crawling is your friend, should you need to move past this reasonable use.
 
@@ -116,9 +116,21 @@ Although it could probably be used to crawl a massive amount of web pages (after
 The Crawler type controls the whole execution. It spawns worker goroutines and manages the URL queue. There are two helper constructors:
 
 *    **NewCrawler(Extender)** : Creates a crawler with the specified `Extender` instance.
-*    **NewCrawlerWithOptions(Options)** : Creates a crawler with a pre-initialized `*Options` instance.
+*    **NewCrawlerWithOptions(*Options)** : Creates a crawler with a pre-initialized `*Options` instance.
 
-The one and only public function is `Run(seeds ...string) EndReason` which take a variadic string argument, the base URLs used to start crawling. It ends when there are no more URLs waiting to be visited, or when the `Options.MaxVisit` number is reached.
+The one and only public function is `Run(seeds interface{}) error` which take a seeds argument (the base URLs used to start crawling) that can be expressed a number of different ways. It ends when there are no more URLs waiting to be visited, or when the `Options.MaxVisit` number is reached. It returns an error, which is `ErrMaxVisits` if this setting is what caused the crawling to stop.
+
+<a name="types" />
+The various types that can be used to pass the seeds are the following (the same types apply for the empty interfaces in `Extender.Start(interface{}) interface{}`, `Extender.Visit(*URLContext, *http.Response, *goquery.Document) (interface{}, bool)` and in `Extender.Visited(*URLContext, interface{})`):
+
+*    `string` : a single URL expressed as a string
+*    `[]string` : a slice of URLs expressed as strings
+*    `*url.URL` : a pointer to a parsed URL object
+*    `[]*url.URL` : a slice of pointers to parsed URL objects
+*    `map[string]interface{}` : a map of URLs expressed as strings (for the key) and their associated state data
+*    `map[*url.URL]interface{}` : a map of URLs expressed as parsed pointers to URL objects (for the key) and their associated state data
+
+For convenience, the types `gocrawl.S` and `gocrawl.U` are provided as equivalent to the map of strings and map of URLs, respectively (so that, for example, the code can look like `gocrawl.S{"http://site.com": "some state data"}`).
 
 ### Options
 
@@ -137,7 +149,7 @@ The `Options` type provides the hooks and customizations offered by gocrawl. All
 
 *    **EnqueueChanBuffer** : The size of the buffer for the Enqueue channel (the channel that allows the extender to arbitrarily enqueue new URLs in the crawler). Defaults to 100.
 
-*    **HostBufferFactor** : The factor (multiplier) for the size of the workers map and the communication channel when SameHostOnly is set to `false`. When SameHostOnly is `true`, the Crawler knows exactly the required size (the number of different hosts based on the seed URLs), but when it is `false`, the size may grow exponentially. By default, a factor of 10 is used (size is set to 10 times the number of different hosts based on the seed URLs).
+*    **HostBufferFactor** : The factor (multiplier) for the size of the workers map and the communication channel when `SameHostOnly` is set to `false`. When SameHostOnly is `true`, the Crawler knows exactly the required size (the number of different hosts based on the seed URLs), but when it is `false`, the size may grow exponentially. By default, a factor of 10 is used (size is set to 10 times the number of different hosts based on the seed URLs).
 
 *    **CrawlDelay** : The time to wait between each request to the same host. The delay starts as soon as the response is received from the host. This is a `time.Duration` type, so it can be specified with `5 * time.Second` for example (which is the default value, 5 seconds). **If a crawl delay is specified in the robots.txt file, in the group matching the robot's user-agent, by default this delay is used instead**. Crawl delay can be customized further by implementing the `ComputeDelay` extender function.
 
@@ -145,9 +157,9 @@ The `Options` type provides the hooks and customizations offered by gocrawl. All
 
 *    **SameHostOnly** : Limit the URLs to enqueue only to those links targeting the same host, which is `true` by default.
 
-*    **HeadBeforeGet** : Asks the crawler to issue a HEAD request (and a subsequent `RequestGet()` extender method call) before making the eventual GET request. This is set to `false` by default. See also the `Filter()` extender method.
+*    **HeadBeforeGet** : Asks the crawler to issue a HEAD request (and a subsequent `RequestGet()` extender method call) before making the eventual GET request. This is set to `false` by default. See also the `URLContext` structure explained below.
 
-*    **URLNormalizationFlags** : The flags to apply when normalizing the URL using the [purell][] library. The URLs found by crawling a page are normalized before being submitted to the `Filter` extender function (to determine if they should be visited or not). Defaults to the most aggressive normalization allowed by purell, `purell.FlagsAllGreedy`.
+*    **URLNormalizationFlags** : The flags to apply when normalizing the URL using the [purell][] library. The URLs are normalized before being enqueued and passed around to the `Extender` methods in the `URLContext` structure. Defaults to the most aggressive normalization allowed by purell, `purell.FlagsAllGreedy`.
 
 *    **LogFlags** : The level of verbosity for logging. Defaults to errors only (`LogError`). Can be a set of flags (i.e. `LogError | LogTrace`).
 
@@ -155,13 +167,15 @@ The `Options` type provides the hooks and customizations offered by gocrawl. All
 
 ### The Extender interface
 
+TODO : Document URLContext
+
 This last option field, `Extender`, is crucial in using gocrawl, so here are the details for each callback function required by the `Extender` interface.
 
-*    **Start** : `Start(seeds []string) []string`. Called when `Run` is called on the crawler, with the seeds passed to `Run` as argument. It returns a slice of strings that will be used as actual seeds, so that this callback can control which seeds are passed to the crawler.
+*    **Start** : `Start(seeds interface{}) interface{}`. Called when `Run` is called on the crawler, with the seeds passed to `Run` as argument. It returns the data that will be used as actual seeds, so that this callback can control which seeds are processed by the crawler. See [the various supported types](#types) for more information. By default, this is a passthrough, it returns the data received as argument.
 
-*    **End** : `End(reason EndReason)`. Called when the crawling ends, with an [`EndReason`][er] flag as argument. This same `EndReason` flag is also returned from the `Crawler.Run()` function.
+*    **End** : `End(err error)`. Called when the crawling ends, with the error or nil. This same error is also returned from the `Crawler.Run()` function. By default, this method is a no-op.
 
-*    **Error** : `Error(err *CrawlError)`. Called when an error occurs. Errors do **not** stop the crawling execution. A [`CrawlError`][ce] instance is passed as argument. This specialized error implementation includes - among other interesting fields - a `Kind` field that indicates the step where the error occurred.
+*    **Error** : `Error(err *CrawlError)`. Called when a crawling error occurs. Errors do **not** stop the crawling execution. A [`CrawlError`][ce] instance is passed as argument. This specialized error implementation includes - among other interesting fields - a `Kind` field that indicates the step where the error occurred, and an `*URLContext` field identifying the processed URL that caused the error. By default, this method is a no-op.
 
 *    **Log** : `Log(logFlags LogFlags, msgLevel LogFlags, msg string)`. The logging function. By default, prints to the standard error (Stderr), and outputs only the messages with a level included in the `LogFlags` option. If a custom `Log()` method is implemented, it is up to you to validate if the message should be considered, based on the level of verbosity requested (i.e. `if logFlags&msgLevel == msgLevel ...`), since the method always gets called for all messages.
 
@@ -224,3 +238,4 @@ The [BSD 3-Clause license][bsd].
 [i10]: https://github.com/PuerkitoBio/gocrawl/issues/10
 [i9]: https://github.com/PuerkitoBio/gocrawl/issues/9
 [goqinstall]: https://github.com/PuerkitoBio/goquery#installation
+[br04]: 
