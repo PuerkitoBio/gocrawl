@@ -53,7 +53,7 @@ func isRobotsURL(u *url.URL) bool {
 	return strings.ToLower(u.Path) == robotsTxtPath
 }
 
-func (this *URLContext) GetRobotsURLCtx() (*URLContext, error) {
+func (this *URLContext) getRobotsURLCtx() (*URLContext, error) {
 	robUrl, err := this.normalizedURL.Parse(robotsTxtPath)
 	if err != nil {
 		return nil, err
@@ -138,6 +138,11 @@ func (this *Crawler) toURLContexts(raw interface{}, src *url.URL) []*URLContext 
 
 	case U:
 		mapUrl(v)
+
+	default:
+		if raw != nil {
+			panic("unsupported URL type passed as empty interface")
+		}
 	}
 	return res
 }

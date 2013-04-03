@@ -238,7 +238,7 @@ func (this *Crawler) enqueueUrls(ctxs []*URLContext) (cnt int) {
 				// No worker exists for this host, launch a new one
 				w = this.launchWorker(ctx)
 				// Automatically enqueue the robots.txt URL as first in line
-				if robCtx, e := ctx.GetRobotsURLCtx(); e != nil {
+				if robCtx, e := ctx.getRobotsURLCtx(); e != nil {
 					this.Options.Extender.Error(newCrawlError(ctx, e, CekParseRobots))
 					this.logFunc(LogError, "ERROR parsing robots.txt from %s: %s", ctx.normalizedURL, e)
 				} else {

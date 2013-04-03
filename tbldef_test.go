@@ -1021,6 +1021,17 @@ var (
 		},
 
 		&testCase{
+			name: "PanicIfInvalidSeedType",
+			opts: &Options{
+				SameHostOnly: true,
+				CrawlDelay:   DefaultTestCrawlDelay,
+				LogFlags:     LogAll,
+			},
+			seeds:  212,
+			panics: true,
+		},
+
+		&testCase{
 			name:     "NoCrawlDelay",
 			external: testNoCrawlDelay,
 		},

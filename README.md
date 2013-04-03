@@ -1,7 +1,5 @@
 # gocrawl
 
-// TODO : Update README, document changes...
-
 gocrawl is a polite, slim and concurrent web crawler written in Go.
 
 ## Features
@@ -29,7 +27,14 @@ Once this is done, gocrawl may be installed as usual:
 
 ## Changelog
 
-*    **v0.4.0** : **BREAKING CHANGES** major refactor, API changes, see the [detailed wiki page][br04].
+*    **v0.4.0** : **BREAKING CHANGES** major refactor, API changes:
+    * Use an `*URLContext` structure as first argument to all `Extender` interface functions that are called in the context of an URL, instead of a simple `*url.URL` pointer that was sometimes normalized, sometimes not.
+    * Remove the `EnqueueOrigin` enumeration flag. It wasn't even used by gocrawl, and it is a kind of state associated with the URL, so this feature is now generalized with the next bullet...
+    * Add a `State` for each URL, so that the crawling process can associate arbitrary data with a given URL (for example, the ID of a record in the database).
+    * More idiomatic use of errors (`ErrXxx` variables, `Run()` now returns an error, removing the need for the `EndReason` enum).
+    * Much simplified `Filter()` function. It now only returns a `bool` indicating if it should be visited or not. The HEAD request override feature is provided by the `*URLContext` structure, and can be set anywhere. The priority feature was unimplemented and has been removed from the return values, if it gets implemented it will probably be via the `*URLContext` structure too.
+    * `Start`, `Run`, `Visit`, `Visited` and the `EnqueueChan` all work with the empty interface type for the URL data. While this is an inconvenience for compile-time checks, it allows for more flexibility regarding the state feature. Instead of always forcing a `map[string]interface{}` type even when no state is needed, gocrawl supports [various types](#types).
+    * Some other internal changes, better tests.
 *    **v0.3,2** : Fix the high CPU usage when waiting for a crawl delay.
 *    **v0.3.1** : Export the `HttpClient` variable used by the default `Fetch()` implementation (see [issue #9][i9]).
 *    **v0.3.0** : **BEHAVIOR CHANGE** filter done with normalized URL, fetch done with original, non-normalized URL (see [issue #10][i10]).
@@ -107,7 +112,7 @@ The major use-case behind gocrawl is to crawl some web pages while respecting th
 * **Each host spawns its own worker (goroutine)** : This makes sense since it must first read its robots.txt data, and only then proceed sequentially, one request at a time, with the specified delay between each fetch. There are no constraints inter-host, so each separate worker can crawl independently.
 * **The visitor function is called on the worker goroutine** : Again, this is ok because the crawl delay is likely bigger than the time required to parse the document, so this processing will usually *not* penalize the performance.
 * **Edge cases with no crawl delay are supported, but not optimized** : In the rare but possible event when a crawl with no delay is needed (e.g.: on your own servers, or with permission outside busy hours, etc.), gocrawl accepts a null (zero) delay, but doesn't provide optimizations. That is, there is no "special path" in the code where visitor functions are de-coupled from the worker, or where multiple workers can be launched concurrently on the same host. (In fact, if this case is your *only* use-case, I would recommend *not* to use a library at all - since there is little value in it -, and simply use Go's standard libs and fetch at will with as many goroutines as are necessary.)
-* **Extender interface provides the means to write a drop-in, fully encapsulated behaviour** : An implementation of `Extender` can radically enhance the core library, with caching, persistence, different fetching strategies, etc. This is why the `Extender.Start()` method is somewhat redundant with the `Crawler.Run()` method, `Run` allows calling the crawler as a library, while `Start` makes it possible to encapsulate the logic required to select the seed URLs into the `Extender`.
+* **Extender interface provides the means to write a drop-in, fully encapsulated behaviour** : An implementation of `Extender` can radically enhance the core library, with caching, persistence, different fetching strategies, etc. This is why the `Extender.Start()` method is somewhat redundant with the `Crawler.Run()` method, `Run` allows calling the crawler as a library, while `Start` makes it possible to encapsulate the logic required to select the seed URLs into the `Extender`. The same goes for `Extender.End()` and the return value of `Run`.
 
 Although it could probably be used to crawl a massive amount of web pages (after all, this is *fetch, visit, enqueue, repeat ad nauseam*!), most realistic (and um... tested!) use-cases should be based on a well-known, well-defined limited bucket of seeds. Distributed crawling is your friend, should you need to move past this reasonable use.
 
@@ -167,8 +172,6 @@ The `Options` type provides the hooks and customizations offered by gocrawl. All
 
 ### The Extender interface
 
-TODO : Document URLContext
-
 This last option field, `Extender`, is crucial in using gocrawl, so here are the details for each callback function required by the `Extender` interface.
 
 *    **Start** : `Start(seeds interface{}) interface{}`. Called when `Run` is called on the crawler, with the seeds passed to `Run` as argument. It returns the data that will be used as actual seeds, so that this callback can control which seeds are processed by the crawler. See [the various supported types](#types) for more information. By default, this is a passthrough, it returns the data received as argument.
@@ -179,37 +182,49 @@ This last option field, `Extender`, is crucial in using gocrawl, so here are the
 
 *    **Log** : `Log(logFlags LogFlags, msgLevel LogFlags, msg string)`. The logging function. By default, prints to the standard error (Stderr), and outputs only the messages with a level included in the `LogFlags` option. If a custom `Log()` method is implemented, it is up to you to validate if the message should be considered, based on the level of verbosity requested (i.e. `if logFlags&msgLevel == msgLevel ...`), since the method always gets called for all messages.
 
-*    **ComputeDelay** : `ComputeDelay(host string, di *DelayInfo, lastFetch *FetchInfo) time.Duration`. Called by a worker before requesting a URL. Arguments are the host's name, the crawl delay information (delays from the Options struct, from the robots.txt, and the last used delay), and the last fetch information, so that it is possible to adapt to the current responsiveness of the host. It returns the delay to use. 
+*    **ComputeDelay** : `ComputeDelay(host string, di *DelayInfo, lastFetch *FetchInfo) time.Duration`. Called by a worker before requesting a URL. Arguments are the host's name (the normalized form of the `*url.URL.Host`), the crawl delay information (includes delays from the Options struct, from the robots.txt, and the last used delay), and the last fetch information, so that it is possible to adapt to the current responsiveness of the host. It returns the delay to use.
 
-*    **Fetch** : `Fetch(u *url.URL, userAgent string, headRequest bool) (*http.Response, error)`. Called by a worker to request the URL. The `DefaultExtender.Fetch()` implementation uses the public `HttpClient` variable (a custom `http.Client`) to fetch the pages *without* following redirections, instead returning an error so that the worker can enqueue the redirect-to URL. This enforces the whitelisting by the `Filter()` of every URL fetched by the crawling process. If `headRequest` is `true`, a HEAD request is made instead of a GET. Note that as of gocrawl v0.3, `Fetch` is called with the non-normalized URL.
+The remaining extension functions are all called in the context of a given URL, so their first argument is always a pointer to an `URLContext` structure. So before documenting these methods, here is an explanation of all `URLContext` fields and methods:
 
-    Internally, gocrawl sets its http.Client's `CheckRedirect()` function field to a custom implementation that follows redirections for robots.txt URLs only (since a redirect on robots.txt still means that the site owner wants us to use these rules for this host). The worker is aware of the `*gocrawl.EnqueueRedirectError` error, so if a non-robots.txt URL asks for a redirection, `CheckRedirect()` returns an instance of this error, and the worker recognizes this and enqueues the redirect-to URL, stopping the processing of the current URL. It is possible to provide a custom `Fetch()` implementation based on the same logic. Any `CheckRedirect()` implementation that returns a `*gocrawl.EnqueueRedirectError` error will behave this way - that is, the worker will detect this error and will enqueue the redirect-to URL. See the source files ext.go and worker.go for details.
+* `HeadBeforeGet bool` : This field is initialized with the global setting from the crawler's `Options` structure. It can be overridden at any time, though to be useful it should be done before the call to `Fetch`, where the decision to make a HEAD request or not is made.
+* `State interface{}` : This field holds the arbitrary state data associated with the URL. It can be `nil` or a value of any type.
+* `URL() *url.URL` : The getter method that returns the parsed URL in non-normalized form.
+* `NormalizedURL() *url.URL` : The getter method that returns the parsed URL in normalized form.
+* `SourceURL() *url.URL` : The getter method that returns the source URL in non-normalized form. Can be `nil` for seeds or URLs enqueued via the `EnqueueChan`.
+* `NormalizedSourceURL() *url.URL` : The getter method that returns the source URL in normalized form. Can be `nil` for seeds or URLs enqueued via the `EnqueueChan`.
+* `IsRobotsURL() bool` : Indicates if the current URL is a robots.txt URL.
+
+With this out of the way, here are the other `Extender` functions:
+
+*    **Fetch** : `Fetch(ctx *URLContext, userAgent string, headRequest bool) (*http.Response, error)`. Called by a worker to request the URL. The `DefaultExtender.Fetch()` implementation uses the public `HttpClient` variable (a custom `http.Client`) to fetch the pages *without* following redirections, instead returning a special error (`ErrEnqueueRedirect`) so that the worker can enqueue the redirect-to URL. This enforces the whitelisting by the `Filter()` of every URL fetched by the crawling process. If `headRequest` is `true`, a HEAD request is made instead of a GET. Note that as of gocrawl v0.3, the default `Fetch` implementation uses the non-normalized URL.
+
+    Internally, gocrawl sets its http.Client's `CheckRedirect()` function field to a custom implementation that follows redirections for robots.txt URLs only (since a redirect on robots.txt still means that the site owner wants us to use these rules for this host). The worker is aware of the `ErrEnqueueRedirect` error, so if a non-robots.txt URL asks for a redirection, `CheckRedirect()` returns this error, and the worker recognizes this and enqueues the redirect-to URL, stopping the processing of the current URL. It is possible to provide a custom `Fetch()` implementation based on the same logic. Any `CheckRedirect()` implementation that returns a `ErrEnqueueRedirect` error will behave this way - that is, the worker will detect this error and will enqueue the redirect-to URL. See the source files ext.go and worker.go for details.
 
     The `HttpClient` variable being public, it is possible to customize it so that it uses another `CheckRedirect()` function, or a different `Transport` object, etc. This customization should be done prior to starting the crawler. It will then be used by the default `Fetch()` implementation, or it can also be used by a custom `Fetch()` if required. Note that this client is shared by all crawlers in your application. Should you need different http clients per crawler in the same application, a custom `Fetch()` using a private `http.Client` instance should be provided.
 
-*    **RequestGet** : `RequestGet(headRes *http.Response) bool`. Indicates if the crawler should proceed with a GET request based on the HEAD request's response. This method is only called if a HEAD was requested (either via the global `HeadBeforeGet` option, or via the `Filter()` return value). The default implementation returns `true` if the HEAD response status code was 2xx.
+*    **RequestGet** : `RequestGet(ctx *URLContext, headRes *http.Response) bool`. Indicates if the crawler should proceed with a GET request based on the HEAD request's response. This method is only called if a HEAD was requested (based on the `*URLContext.HeadBeforeGet` field). The default implementation returns `true` if the HEAD response status code was 2xx.
 
-*    **RequestRobots** : `RequestRobots(u *url.URL, robotAgent string) (request bool, data []byte)`. Asks whether the robots.txt URL should be fetched. If `false` is returned as first value, the `data` value is considered to be the robots.txt cached content, and is used as such (if it is empty, it behaves as if there was no robots.txt). The `DefaultExtender.RequestRobots` implementation returns `true, nil`.
+*    **RequestRobots** : `RequestRobots(ctx *URLContext, robotAgent string) (data []byte, request bool)`. Asks whether the robots.txt URL should be fetched. If `false` is returned as second value, the `data` value is considered to be the robots.txt cached content, and is used as such (if it is empty, it behaves as if there was no robots.txt). The `DefaultExtender.RequestRobots` implementation returns `nil, true`.
 
-*    **FetchedRobots** : `FetchedRobots(res *http.Response)`. Called when the robots.txt URL has been fetched from the host, so that it is possible to cache its content and feed it back to future `RequestRobots()` calls. By default, this is a no-op.
+*    **FetchedRobots** : `FetchedRobots(ctx *URLContext, res *http.Response)`. Called when the robots.txt URL has been fetched from the host, so that it is possible to cache its content and feed it back to future `RequestRobots()` calls. By default, this is a no-op.
 
-*    **Filter** : `Filter(u *url.URL, from *url.URL, isVisited bool, origin EnqueueOrigin) (enqueue bool, priority int, headRequest HeadRequestMode)`. Called when deciding if a URL should be enqueued for visiting. It receives the target `*url.URL` link in normalized form, the source `*url.URL` link (where this URL was found, `nil` for the seeds or for manually enqueued URLs, via the enqueue channel - see below), a `bool` is visited flag, indicating if this URL has already been visited in this crawling execution, and an origin (which can be extended to create custom origins, starting at `EoCustomStart` instead of `iota`). It returns a `bool` flag ordering gocrawl to visit (`true`) or ignore (`false`) the URL, a priority value, **ignored at the moment**, and whether or not to request a HEAD before a GET (if `HrmDefault` is returned, the global `HeadBeforeGet` setting is used, while `HrmRequest` and `HrmIgnore` override the global setting). Even if the function returns `true` to enqueue the URL for visiting, the normalized form of the URL must still comply to these rules:
+*    **Filter** : `Filter(ctx *URLContext, isVisited bool) bool`. Called when deciding if a URL should be enqueued for visiting. It receives the `*URLContext` and a `bool` "is visited" flag, indicating if this URL has already been visited in this crawling execution. It returns a `bool` flag ordering gocrawl to visit (`true`) or ignore (`false`) the URL. Even if the function returns `true` to enqueue the URL for visiting, the normalized form of the URL must still comply to these rules:
 
 1. It must be an absolute URL 
 2. It must have a `http/https` scheme
 3. It must have the same host if the `SameHostOnly` flag is set
 
-    The `DefaultExtender.Filter` implementation returns `true` if the URL has not been visited yet (the *visited* flag is based on the normalized version of the URLs), false otherwise. It returns `0` for the priority and `HrmDefault` for the head request.
+    The `DefaultExtender.Filter` implementation returns `true` if the URL has not been visited yet (the *visited* flag is based on the normalized version of the URLs), false otherwise.
 
-*    **Enqueued** : `Enqueued(u *url.URL, from *url.URL)`. Called when a URL has been enqueued by the crawler. An enqueued URL may still be disallowed by a robots.txt policy, so it may end up *not* being fetched.
+*    **Enqueued** : `Enqueued(ctx *URLContext)`. Called when a URL has been enqueued by the crawler. An enqueued URL may still be disallowed by a robots.txt policy, so it may end up *not* being fetched. By default, this method is a no-op.
 
-*    **Visit** : `Visit(res *http.Response, doc *goquery.Document) (harvested []*url.URL, findLinks bool)`. Called when visiting a URL. It receives a `*http.Response` response object, along with a ready-to-use `*goquery.Document` object (or `nil` if the response body could not be parsed). It returns a slice of `*url.URL` links to process, and a `bool` flag indicating if gocrawl should find the links himself. When this flag is `true`, the slice of URLs is ignored and gocrawl searches the goquery document for links to enqueue. When `false`, the returned slice of URLs is enqueued, if any. The `DefaultExtender.Visit` implementation returns `nil, true` so that links from a visited page are found and processed.
+*    **Visit** : `Visit(ctx *URLContext, res *http.Response, doc *goquery.Document) (harvested interface{}, findLinks bool)`. Called when visiting a URL. It receives the URL context, a `*http.Response` response object, along with a ready-to-use `*goquery.Document` object (or `nil` if the response body could not be parsed). It returns the links to process (see [above](#types) for the possible types), and a `bool` flag indicating if gocrawl should find the links himself. When this flag is `true`, the `harvested` return value is ignored and gocrawl searches the goquery document for links to enqueue. When `false`, the `harvested` data is enqueued, if any. The `DefaultExtender.Visit` implementation returns `nil, true` so that links from a visited page are automatically found and processed.
 
-*    **Visited** : `Visited(u *url.URL, harvested []*url.URL)`. Called after a page has been visited. The URLs found during the visit (either by the `Visit` function or by gocrawl) are passed as argument.
+*    **Visited** : `Visited(ctx *URLContext, harvested interface{})`. Called after a page has been visited. The URL context and the URLs found during the visit (either by the `Visit` function or by gocrawl) are passed as argument. By default, this method is a no-op.
 
-*    **Disallowed** : `Disallowed(u *url.URL)`. Called when an enqueued URL gets denied acces by a robots.txt policy.
+*    **Disallowed** : `Disallowed(ctx *URLContext)`. Called when an enqueued URL gets denied acces by a robots.txt policy. By default, this method is a no-op.
 
-Finally, by convention, if a field named `EnqueueChan` with the very specific type of `chan<- *CrawlerCommand` exists and is accessible on the Extender instance, this field will get set to the enqueue channel, which accepts a pointer to a `CrawlerCommand` structure, specifying a URL and an origin. This URL will then be processed by the crawler as if it had been harvested from a visit. It will trigger a call to `Filter()` and, if allowed, will get fetched and visited.
+Finally, by convention, if a field named `EnqueueChan` with the very specific type of `chan<- interface{}` exists and is accessible on the `Extender` instance, this field will get set to the enqueue channel, which accepts [the expected types](#types) as data for URLs to enqueue. This data will then be processed by the crawler as if it had been harvested from a visit. It will trigger calls to `Filter()` and, if allowed, will get fetched and visited.
 
 The `DefaultExtender` structure has a valid `EnqueueChan` field, so if it is embedded as an anonymous field in a custom Extender structure, this structure automatically gets the `EnqueueChan` functionality.
 
@@ -238,4 +253,3 @@ The [BSD 3-Clause license][bsd].
 [i10]: https://github.com/PuerkitoBio/gocrawl/issues/10
 [i9]: https://github.com/PuerkitoBio/gocrawl/issues/9
 [goqinstall]: https://github.com/PuerkitoBio/goquery#installation
-[br04]: 
