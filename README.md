@@ -25,12 +25,14 @@ Once this is done, gocrawl may be installed as usual:
 
 `go get github.com/PuerkitoBio/gocrawl`
 
+To install a previous version, you have to `git clone https://github.com/PuerkitoBio/gocrawl` into your `$GOPATH/src/github.com/PuerkitoBio/gocrawl/` directory, and then run (for example) `git checkout v0.3.2` to checkout a specific version, and `go install` to build and install the Go package.
+
 ## Changelog
 
 *    **v0.4.0** : **BREAKING CHANGES** major refactor, API changes:
     * Use an `*URLContext` structure as first argument to all `Extender` interface functions that are called in the context of an URL, instead of a simple `*url.URL` pointer that was sometimes normalized, sometimes not.
     * Remove the `EnqueueOrigin` enumeration flag. It wasn't even used by gocrawl, and it is a kind of state associated with the URL, so this feature is now generalized with the next bullet...
-    * Add a `State` for each URL, so that the crawling process can associate arbitrary data with a given URL (for example, the ID of a record in the database).
+    * Add a `State` for each URL, so that the crawling process can associate arbitrary data with a given URL (for example, the ID of a record in the database). Fixes [issue #14][i14].
     * More idiomatic use of errors (`ErrXxx` variables, `Run()` now returns an error, removing the need for the `EndReason` enum).
     * Much simplified `Filter()` function. It now only returns a `bool` indicating if it should be visited or not. The HEAD request override feature is provided by the `*URLContext` structure, and can be set anywhere. The priority feature was unimplemented and has been removed from the return values, if it gets implemented it will probably be via the `*URLContext` structure too.
     * `Start`, `Run`, `Visit`, `Visited` and the `EnqueueChan` all work with the empty interface type for the URL data. While this is an inconvenience for compile-time checks, it allows for more flexibility regarding the state feature. Instead of always forcing a `map[string]interface{}` type even when no state is needed, gocrawl supports [various types](#types).
@@ -126,7 +128,7 @@ The Crawler type controls the whole execution. It spawns worker goroutines and m
 The one and only public function is `Run(seeds interface{}) error` which take a seeds argument (the base URLs used to start crawling) that can be expressed a number of different ways. It ends when there are no more URLs waiting to be visited, or when the `Options.MaxVisit` number is reached. It returns an error, which is `ErrMaxVisits` if this setting is what caused the crawling to stop.
 
 <a name="types" />
-The various types that can be used to pass the seeds are the following (the same types apply for the empty interfaces in `Extender.Start(interface{}) interface{}`, `Extender.Visit(*URLContext, *http.Response, *goquery.Document) (interface{}, bool)` and in `Extender.Visited(*URLContext, interface{})`):
+The various types that can be used to pass the seeds are the following (the same types apply for the empty interfaces in `Extender.Start(interface{}) interface{}`, `Extender.Visit(*URLContext, *http.Response, *goquery.Document) (interface{}, bool)` and in `Extender.Visited(*URLContext, interface{})`, as well as the type of the `EnqueueChan` field):
 
 *    `string` : a single URL expressed as a string
 *    `[]string` : a slice of URLs expressed as strings
@@ -249,7 +251,8 @@ The [BSD 3-Clause license][bsd].
 [godoc]: http://godoc.org/github.com/PuerkitoBio/gocrawl
 [er]: http://godoc.org/github.com/PuerkitoBio/gocrawl#EndReason
 [ce]: http://godoc.org/github.com/PuerkitoBio/gocrawl#CrawlError
-[gotalk]: http://talks.golang.org/2012/chat.slide#32
+[gotalk]: http://talks.golang.org/2012/chat.slide#33
 [i10]: https://github.com/PuerkitoBio/gocrawl/issues/10
 [i9]: https://github.com/PuerkitoBio/gocrawl/issues/9
 [goqinstall]: https://github.com/PuerkitoBio/goquery#installation
+[i14]: https://github.com/PuerkitoBio/gocrawl/issues/14
