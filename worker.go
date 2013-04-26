@@ -2,7 +2,7 @@ package gocrawl
 
 import (
 	"bytes"
-	"exp/html"
+	"code.google.com/p/go.net/html"
 	"github.com/PuerkitoBio/goquery"
 	"github.com/temoto/robotstxt.go"
 	"io/ioutil"
