@@ -19,9 +19,7 @@ gocrawl depends on the following userland libraries:
 *    [purell][]
 *    [robotstxt.go][robots]
 
-**Until Go1.1 is released, and because of the dependency on GoQuery that, in turns, depends on Go's experimental HTML package, some special steps must be followed to install GoQuery. Follow [these steps][goqinstall] before installing gocrawl.**
-
-Once this is done, gocrawl may be installed as usual:
+To install:
 
 `go get github.com/PuerkitoBio/gocrawl`
 
@@ -29,6 +27,7 @@ To install a previous version, you have to `git clone https://github.com/Puerkit
 
 ## Changelog
 
+*    **v0.4.1** : now go-getable, since goquery is go-getable too.
 *    **v0.4.0** : **BREAKING CHANGES** major refactor, API changes:
     * Use an `*URLContext` structure as first argument to all `Extender` interface functions that are called in the context of an URL, instead of a simple `*url.URL` pointer that was sometimes normalized, sometimes not.
     * Remove the `EnqueueOrigin` enumeration flag. It wasn't even used by gocrawl, and it is a kind of state associated with the URL, so this feature is now generalized with the next bullet...
@@ -254,5 +253,4 @@ The [BSD 3-Clause license][bsd].
 [gotalk]: http://talks.golang.org/2012/chat.slide#33
 [i10]: https://github.com/PuerkitoBio/gocrawl/issues/10
 [i9]: https://github.com/PuerkitoBio/gocrawl/issues/9
-[goqinstall]: https://github.com/PuerkitoBio/goquery#installation
 [i14]: https://github.com/PuerkitoBio/gocrawl/issues/14
