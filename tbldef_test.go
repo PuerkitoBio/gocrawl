@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"net/url"
 	"regexp"
+	"runtime"
 	"strconv"
 	"strings"
 	"testing"
@@ -461,12 +462,15 @@ var (
 			seeds: []string{
 				"#toto",
 			},
-			asserts: a{
-				eMKError: 1,
-				eMKVisit: 0,
-			},
-			logAsserts: []string{
-				"ERROR parsing URL #toto\n",
+			customAssert: func(spy *spyExtender, t *testing.T) {
+				v := runtime.Version()
+				if strings.HasPrefix(v, "go1.0") {
+					assertCallCount(spy, "InvalidSeed", eMKError, 1, t)
+					assertIsInLog("InvalidSeed", spy.b, "ERROR parsing URL #toto\n", t)
+				} else {
+					assertIsInLog("InvalidSeed", spy.b, "ignore on absolute policy: #toto\n", t)
+				}
+				assertCallCount(spy, "InvalidSeed", eMKVisit, 0, t)
 			},
 		},
 
