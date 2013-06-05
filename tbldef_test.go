@@ -3,6 +3,7 @@ package gocrawl
 import (
 	"fmt"
 	"github.com/PuerkitoBio/goquery"
+	"github.com/PuerkitoBio/purell"
 	"io/ioutil"
 	"net/http"
 	"net/url"
@@ -1033,6 +1034,60 @@ var (
 			},
 			seeds:  212,
 			panics: true,
+		},
+
+		&testCase{
+			name: "QueryStringLostAfterNormalization-i16",
+			http: true,
+			opts: &Options{
+				SameHostOnly:          false,
+				CrawlDelay:            DefaultTestCrawlDelay,
+				LogFlags:              LogAll,
+				URLNormalizationFlags: purell.FlagsUsuallySafeNonGreedy,
+			},
+			seeds: []string{
+				"http://www.example.com/",
+			},
+			funcs: f{
+				eMKFilter: func(ctx *URLContext, isVisited bool) bool {
+					return !isVisited
+				},
+				eMKVisit: func(ctx *URLContext, res *http.Response, doc *goquery.Document) (interface{}, bool) {
+					return "http://www.example.com/new/?start=60", false
+				},
+			},
+			logAsserts: []string{
+				"enqueue: http://www.example.com/new/?start=60\n",
+			},
+		},
+
+		&testCase{
+			name: "QueryStringLostAfterNormalizationWithParse-i16",
+			http: true,
+			opts: &Options{
+				SameHostOnly:          false,
+				CrawlDelay:            DefaultTestCrawlDelay,
+				LogFlags:              LogAll,
+				URLNormalizationFlags: purell.FlagsUsuallySafeNonGreedy,
+			},
+			seeds: []string{
+				"http://www.example.com/",
+			},
+			funcs: f{
+				eMKFilter: func(ctx *URLContext, isVisited bool) bool {
+					return !isVisited
+				},
+				eMKVisit: func(ctx *URLContext, res *http.Response, doc *goquery.Document) (interface{}, bool) {
+					u, err := url.Parse("http://www.example.com/new/?start=60")
+					if err != nil {
+						panic(err)
+					}
+					return u, false
+				},
+			},
+			logAsserts: []string{
+				"enqueue: http://www.example.com/new/?start=60\n",
+			},
 		},
 
 		&testCase{
