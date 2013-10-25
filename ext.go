@@ -96,9 +96,9 @@ func (this *DefaultExtender) Log(logFlags LogFlags, msgLevel LogFlags, msg strin
 }
 
 // ComputeDelay returns the delay specified in the Crawler's Options, unless a
-// crawl-delay is specified in the robots.txt file, which has precedence.
+// longer crawl-delay is specified in the robots.txt file, which has precedence.
 func (this *DefaultExtender) ComputeDelay(host string, di *DelayInfo, lastFetch *FetchInfo) time.Duration {
-	if di.RobotsDelay > 0 {
+	if di.RobotsDelay > 0 && di.RobotsDelay > di.OptsDelay {
 		return di.RobotsDelay
 	}
 	return di.OptsDelay
