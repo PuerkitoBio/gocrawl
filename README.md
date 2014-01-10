@@ -2,7 +2,7 @@
 
 gocrawl is a polite, slim and concurrent web crawler written in Go.
 
-For a simpler, more flexible web crawler you may also want to take a look at [fetchbot](https://github.com/PuerkitoBio/fetchbot), a package that builds on the experience of gocrawl.
+For a simpler yet more flexible web crawler you may also want to take a look at [fetchbot](https://github.com/PuerkitoBio/fetchbot), a package that builds on the experience of gocrawl.
 
 ## Features
 
