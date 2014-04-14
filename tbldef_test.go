@@ -2,8 +2,6 @@ package gocrawl
 
 import (
 	"fmt"
-	"github.com/PuerkitoBio/goquery"
-	"github.com/PuerkitoBio/purell"
 	"io/ioutil"
 	"net/http"
 	"net/url"
@@ -13,6 +11,9 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/PuerkitoBio/goquery"
+	"github.com/PuerkitoBio/purell"
 )
 
 // Type a is a simple syntax helper to create test cases' asserts.
@@ -882,8 +883,10 @@ var (
 			},
 		},
 
+		// ignore this test, now src.ca redirects to radio-canada.ca, then to ici.radio-canada.ca
+		// too fragile.
 		&testCase{
-			name: "RedirectFollow",
+			name: "!RedirectFollow",
 			http: true,
 			opts: &Options{
 				SameHostOnly: false,
@@ -903,8 +906,10 @@ var (
 			},
 		},
 
+		// Like RedirectFollow, src.ca has changed and redirects more times.
+		// Brittle test case.
 		&testCase{
-			name: "RedirectFollowHeadFirst",
+			name: "!RedirectFollowHeadFirst",
 			http: true,
 			opts: &Options{
 				SameHostOnly:  false,
