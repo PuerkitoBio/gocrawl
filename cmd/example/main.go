@@ -35,6 +35,7 @@ func main() {
 	opts.CrawlDelay = 1 * time.Second
 	opts.LogFlags = gocrawl.LogError
 	opts.SameHostOnly = false
+	opts.MaxVisits = 100
 
 	c := gocrawl.NewCrawlerWithOptions(opts)
 	c.Run("http://0value.com")
