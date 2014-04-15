@@ -4,3 +4,4 @@ gocrawl.test
 #*.*#
 *.swp
 tags
+cmd/example/example
