@@ -316,7 +316,20 @@ func (this *Crawler) collectUrls() error {
 			ctxs := this.toURLContexts(enq, nil)
 			this.logFunc(LogTrace, "receive url(s) to enqueue %v", ctxs)
 			this.enqueueUrls(ctxs)
+		case <-this.stop:
+			return ErrInterrupted
 		}
 	}
 	panic("unreachable")
+}
+
+func (this *Crawler) Stop() {
+	defer func() {
+		if err := recover(); err != nil {
+			this.logFunc(LogError, "error when manually stopping crawler: %s", err)
+		}
+	}()
+
+	// this channel may be closed already
+	close(this.stop)
 }
