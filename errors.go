@@ -13,6 +13,8 @@ var (
 	// The error returned when the maximum number of visits, as specified by the
 	// Options field MaxVisits, is reached.
 	ErrMaxVisits = errors.New("the maximum number of visits is reached")
+
+	ErrInterrupted = errors.New("interrupted")
 )
 
 // Enum indicating the kind of the crawling error.
