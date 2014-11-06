@@ -29,6 +29,7 @@ To install a previous version, you have to `git clone https://github.com/Puerkit
 
 ## Changelog
 
+*    **2014-11-06** : Change import paths of net/html to golang.org/x/net/html (see https://groups.google.com/forum/#!topic/golang-nuts/eD8dh3T9yyA).
 *    **v0.4.1** : now go-getable, since goquery is go-getable too.
 *    **v0.4.0** : **BREAKING CHANGES** major refactor, API changes:
     * Use an `*URLContext` structure as first argument to all `Extender` interface functions that are called in the context of an URL, instead of a simple `*url.URL` pointer that was sometimes normalized, sometimes not.
