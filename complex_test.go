@@ -10,7 +10,7 @@ import (
 )
 
 func testNoCrawlDelay(t *testing.T, tc *testCase, buf bool) {
-	const MaxTime = 15 * time.Millisecond // Give some buffer when running with -race
+	const MaxTime = 10 * time.Millisecond
 
 	ff := newFileFetcher()
 	spy := newSpy(ff, buf)

@@ -2,8 +2,6 @@
 
 gocrawl is a polite, slim and concurrent web crawler written in Go.
 
-For a simpler yet more flexible web crawler you may also want to take a look at [fetchbot](https://github.com/PuerkitoBio/fetchbot), a package that builds on the experience of gocrawl.
-
 ## Features
 
 *    Full control over the URLs to visit, inspect and query (using a pre-initialized [goquery][] document)
@@ -21,7 +19,9 @@ gocrawl depends on the following userland libraries:
 *    [purell][]
 *    [robotstxt.go][robots]
 
-To install:
+**Until Go1.1 is released, and because of the dependency on GoQuery that, in turns, depends on Go's experimental HTML package, some special steps must be followed to install GoQuery. Follow [these steps][goqinstall] before installing gocrawl.**
+
+Once this is done, gocrawl may be installed as usual:
 
 `go get github.com/PuerkitoBio/gocrawl`
 
@@ -29,8 +29,6 @@ To install a previous version, you have to `git clone https://github.com/Puerkit
 
 ## Changelog
 
-*    **2014-11-06** : Change import paths of net/html to golang.org/x/net/html (see https://groups.google.com/forum/#!topic/golang-nuts/eD8dh3T9yyA).
-*    **v0.4.1** : now go-getable, since goquery is go-getable too.
 *    **v0.4.0** : **BREAKING CHANGES** major refactor, API changes:
     * Use an `*URLContext` structure as first argument to all `Extender` interface functions that are called in the context of an URL, instead of a simple `*url.URL` pointer that was sometimes normalized, sometimes not.
     * Remove the `EnqueueOrigin` enumeration flag. It wasn't even used by gocrawl, and it is a kind of state associated with the URL, so this feature is now generalized with the next bullet...
@@ -256,4 +254,5 @@ The [BSD 3-Clause license][bsd].
 [gotalk]: http://talks.golang.org/2012/chat.slide#33
 [i10]: https://github.com/PuerkitoBio/gocrawl/issues/10
 [i9]: https://github.com/PuerkitoBio/gocrawl/issues/9
+[goqinstall]: https://github.com/PuerkitoBio/goquery#installation
 [i14]: https://github.com/PuerkitoBio/gocrawl/issues/14
