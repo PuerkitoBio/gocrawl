@@ -2,15 +2,16 @@ package gocrawl
 
 import (
 	"bytes"
-	"exp/html"
-	"github.com/PuerkitoBio/goquery"
-	"github.com/temoto/robotstxt.go"
 	"io/ioutil"
 	"net/http"
 	"net/url"
 	"strings"
 	"sync"
 	"time"
+
+	"github.com/PuerkitoBio/goquery"
+	"github.com/temoto/robotstxt.go"
+	"golang.org/x/net/html"
 )
 
 // The worker is dedicated to fetching and visiting a given host, respecting

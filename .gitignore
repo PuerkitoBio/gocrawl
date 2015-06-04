@@ -1,3 +1,7 @@
 *.sublime-*
 .DS_Store
 gocrawl.test
+#*.*#
+*.swp
+tags
+cmd/example/example

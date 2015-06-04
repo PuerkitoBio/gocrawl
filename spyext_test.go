@@ -65,7 +65,8 @@ type spyExtender struct {
 	methods      map[extensionMethodKey]interface{}
 	calledWith   map[extensionMethodKey][][]interface{}
 	b            bytes.Buffer
-	m            sync.RWMutex
+	m            sync.RWMutex       // Protects access to call count, methods and called with maps
+	logM         sync.Mutex         // Protects access to the log buffer (b)
 	EnqueueChan  chan<- interface{} // Redefine here, not accessible on DefaultExtender
 }
 
@@ -78,6 +79,7 @@ func newSpy(ext Extender, useLogBuffer bool) *spyExtender {
 		make(map[extensionMethodKey][][]interface{}, eMKLast),
 		bytes.Buffer{},
 		sync.RWMutex{},
+		sync.Mutex{},
 		nil,
 	}
 }
@@ -138,6 +140,8 @@ func isCalledWith(actual, compare []interface{}) bool {
 func (this *spyExtender) Log(logFlags LogFlags, msgLevel LogFlags, msg string) {
 	if this.useLogBuffer {
 		if logFlags&msgLevel == msgLevel {
+			this.logM.Lock()
+			defer this.logM.Unlock()
 			this.b.WriteString(msg + "\n")
 		}
 	} else {

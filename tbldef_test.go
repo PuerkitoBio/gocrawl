@@ -2,15 +2,18 @@ package gocrawl
 
 import (
 	"fmt"
-	"github.com/PuerkitoBio/goquery"
 	"io/ioutil"
 	"net/http"
 	"net/url"
 	"regexp"
+	"runtime"
 	"strconv"
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/PuerkitoBio/goquery"
+	"github.com/PuerkitoBio/purell"
 )
 
 // Type a is a simple syntax helper to create test cases' asserts.
@@ -461,12 +464,15 @@ var (
 			seeds: []string{
 				"#toto",
 			},
-			asserts: a{
-				eMKError: 1,
-				eMKVisit: 0,
-			},
-			logAsserts: []string{
-				"ERROR parsing URL #toto\n",
+			customAssert: func(spy *spyExtender, t *testing.T) {
+				v := runtime.Version()
+				if strings.HasPrefix(v, "go1.0") {
+					assertCallCount(spy, "InvalidSeed", eMKError, 1, t)
+					assertIsInLog("InvalidSeed", spy.b, "ERROR parsing URL #toto\n", t)
+				} else {
+					assertIsInLog("InvalidSeed", spy.b, "ignore on absolute policy: #toto\n", t)
+				}
+				assertCallCount(spy, "InvalidSeed", eMKVisit, 0, t)
 			},
 		},
 
@@ -877,8 +883,10 @@ var (
 			},
 		},
 
+		// ignore this test, now src.ca redirects to radio-canada.ca, then to ici.radio-canada.ca
+		// too fragile.
 		&testCase{
-			name: "RedirectFollow",
+			name: "!RedirectFollow",
 			http: true,
 			opts: &Options{
 				SameHostOnly: false,
@@ -898,8 +906,10 @@ var (
 			},
 		},
 
+		// Like RedirectFollow, src.ca has changed and redirects more times.
+		// Brittle test case.
 		&testCase{
-			name: "RedirectFollowHeadFirst",
+			name: "!RedirectFollowHeadFirst",
 			http: true,
 			opts: &Options{
 				SameHostOnly:  false,
@@ -1029,6 +1039,60 @@ var (
 			},
 			seeds:  212,
 			panics: true,
+		},
+
+		&testCase{
+			name: "QueryStringLostAfterNormalization-i16",
+			http: true,
+			opts: &Options{
+				SameHostOnly:          false,
+				CrawlDelay:            DefaultTestCrawlDelay,
+				LogFlags:              LogAll,
+				URLNormalizationFlags: purell.FlagsUsuallySafeNonGreedy,
+			},
+			seeds: []string{
+				"http://www.example.com/",
+			},
+			funcs: f{
+				eMKFilter: func(ctx *URLContext, isVisited bool) bool {
+					return !isVisited
+				},
+				eMKVisit: func(ctx *URLContext, res *http.Response, doc *goquery.Document) (interface{}, bool) {
+					return "http://www.example.com/new/?start=60", false
+				},
+			},
+			logAsserts: []string{
+				"enqueue: http://www.example.com/new/?start=60\n",
+			},
+		},
+
+		&testCase{
+			name: "QueryStringLostAfterNormalizationWithParse-i16",
+			http: true,
+			opts: &Options{
+				SameHostOnly:          false,
+				CrawlDelay:            DefaultTestCrawlDelay,
+				LogFlags:              LogAll,
+				URLNormalizationFlags: purell.FlagsUsuallySafeNonGreedy,
+			},
+			seeds: []string{
+				"http://www.example.com/",
+			},
+			funcs: f{
+				eMKFilter: func(ctx *URLContext, isVisited bool) bool {
+					return !isVisited
+				},
+				eMKVisit: func(ctx *URLContext, res *http.Response, doc *goquery.Document) (interface{}, bool) {
+					u, err := url.Parse("http://www.example.com/new/?start=60")
+					if err != nil {
+						panic(err)
+					}
+					return u, false
+				},
+			},
+			logAsserts: []string{
+				"enqueue: http://www.example.com/new/?start=60\n",
+			},
 		},
 
 		&testCase{
