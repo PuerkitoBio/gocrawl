@@ -2,10 +2,11 @@ package gocrawl
 
 import (
 	"errors"
-	"github.com/PuerkitoBio/goquery"
 	"log"
 	"net/http"
 	"time"
+
+	"github.com/PuerkitoBio/goquery"
 )
 
 // Delay information: the Options delay, the Robots.txt delay, and the last delay used.
@@ -60,6 +61,9 @@ var HttpClient = &http.Client{CheckRedirect: func(req *http.Request, via []*http
 	if isRobotsURL(req.URL) {
 		if len(via) >= 10 {
 			return errors.New("stopped after 10 redirects")
+		}
+		if len(via) > 0 {
+			req.Header.Set("User-Agent", via[0].Header.Get("User-Agent"))
 		}
 		return nil
 	}
@@ -123,7 +127,7 @@ func (this *DefaultExtender) ComputeDelay(host string, di *DelayInfo, lastFetch 
 // allow A, B, and C to be Fetched, while solution 2 would only have required
 // Filter to allow A and C).
 //
-// Solution 2) also has the disadvantage of fetching twice the final URL (once 
+// Solution 2) also has the disadvantage of fetching twice the final URL (once
 // while processing the original URL, so that it knows that there is no more
 // redirection HTTP code, and another time when the actual destination URL is
 // fetched to be visited).
