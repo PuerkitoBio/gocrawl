@@ -1,13 +1,14 @@
 package gocrawl
 
 import (
-	"github.com/PuerkitoBio/purell"
 	"time"
+
+	"github.com/PuerkitoBio/purell"
 )
 
 // Default options
 const (
-	DefaultUserAgent          string                    = `Mozilla/5.0 (Windows NT 6.1; rv:15.0) Gecko/20120716 Firefox/15.0a2`
+	DefaultUserAgent          string                    = `Mozilla/5.0 (Windows NT 6.1; rv:15.0) gocrawl/0.4 Gecko/20120716 Firefox/15.0a2`
 	DefaultRobotUserAgent     string                    = `Googlebot (gocrawl v0.4)`
 	DefaultEnqueueChanBuffer  int                       = 100
 	DefaultHostBufferFactor   int                       = 10
