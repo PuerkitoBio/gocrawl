@@ -55,6 +55,7 @@ func NewCrawler(ext Extender) *Crawler {
 func (this *Crawler) Run(seeds interface{}) error {
 	// Helper log function, takes care of filtering based on level
 	this.logFunc = getLogFunc(this.Options.Extender, this.Options.LogFlags, -1)
+	this.logFunc(LogInfo, "TEST!!!!!!!!")
 
 	seeds = this.Options.Extender.Start(seeds)
 	ctxs := this.toURLContexts(seeds, nil)
