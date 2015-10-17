@@ -362,10 +362,10 @@ func (this *worker) visitUrl(ctx *URLContext, res *http.Response) interface{} {
 
 // Scrape the document's content to gather all links
 func (this *worker) processLinks(doc *goquery.Document) (result []*url.URL) {
-	baseUrl := doc.Find("base[href]").FirstChild
+	baseUrl, _ := doc.Find("base[href]").Attr("href")
 	urls := doc.Find("a[href]").Map(func(_ int, s *goquery.Selection) string {
 		val, _ := s.Attr("href")
-		if baseUrl != nil {
+		if baseUrl != "" {
 			val = baseUrl + val
 		}
 		return val
