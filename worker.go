@@ -365,7 +365,7 @@ func (this *worker) processLinks(doc *goquery.Document) (result []*url.URL) {
 	baseUrl, _ := doc.Find("base[href]").Attr("href")
 	urls := doc.Find("a[href]").Map(func(_ int, s *goquery.Selection) string {
 		val, _ := s.Attr("href")
-		if baseUrl != nil {
+		if baseUrl != "" {
 			val = baseUrl + val
 		}
 		return val
