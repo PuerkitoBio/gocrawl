@@ -262,7 +262,7 @@ func (this *worker) fetchUrl(ctx *URLContext, agent string, headRequest bool) (r
 
 		} else {
 			// Get the fetch duration
-			fetchDuration := now.Sub(time.Now())
+			fetchDuration := time.Now().Sub(now)
 			// Crawl delay starts now.
 			this.wait = time.After(this.lastCrawlDelay)
 
