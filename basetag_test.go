@@ -12,6 +12,8 @@ import (
 
 var visitedPage2 bool = false
 var visitedPage3 bool = false
+var visitedPageA bool = false
+var visitedPageB bool = false
 
 type BaseTagExtender struct {
 	DefaultExtender // Will use the default implementation of all but Visit() and Filter()
@@ -24,6 +26,12 @@ func (this *BaseTagExtender) Visit(ctx *URLContext, res *http.Response, doc *goq
 	}
 	if strings.HasSuffix(ctx.NormalizedURL().String(), "page3.html") {
 		visitedPage3 = true
+	}
+	if strings.HasSuffix(ctx.NormalizedURL().String(), "pagea.html") {
+		visitedPageA = true
+	}
+	if strings.HasSuffix(ctx.NormalizedURL().String(), "pageb.html") {
+		visitedPageB = true
 	}
 	// Return nil and true - let gocrawl find the links
 	return nil, true
@@ -43,8 +51,6 @@ func TestBaseTag(t *testing.T) {
 	opts.CrawlDelay = 1 * time.Second
 	opts.LogFlags = LogAll
 
-	// Play nice with ddgo when running the test!
-	opts.MaxVisits = 2
 	http.Handle("/", http.FileServer(http.Dir("./testdata/hostd")))
 
 	// Create server
@@ -60,10 +66,15 @@ func TestBaseTag(t *testing.T) {
 
 	c := NewCrawlerWithOptions(opts)
 	c.Run("http://localhost:8080/subdir/page1.html")
+	// time.Sleep(30 * time.Second)
 
-	assertTrue(visitedPage2, "expected visitedPage2")
-	assertTrue(visitedPage3, "expected visitedPage3")
+	assertTrue(visitedPage2, "Expected page2.html to be visited")
+	assertTrue(visitedPage3, "Expected page3.html to be visited")
 
+	c.Run("http://localhost:8080/subdir/pagea.html")
+
+	assertTrue(visitedPageA, "Expected pagea.html to be visited")
+	assertTrue(visitedPageB, "Expected pageb.html to be visited")
 	// Close listener
 	if err = l.Close(); err != nil {
 		panic(err)
