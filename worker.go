@@ -10,9 +10,9 @@ import (
 	"time"
 
 	"github.com/PuerkitoBio/goquery"
-	"github.com/statusmachine/urlidentification"
 	"github.com/temoto/robotstxt.go"
 	"golang.org/x/net/html"
+	"path"
 )
 
 // The worker is dedicated to fetching and visiting a given host, respecting
@@ -361,33 +361,18 @@ func (this *worker) visitUrl(ctx *URLContext, res *http.Response) interface{} {
 	return harvested
 }
 
-func handleBaseTag(baseUrl string, hrefUrl string) string {
-	parsedBaseURL, _ := url.Parse(baseUrl)
-	// The spec supports paths like "/index.html" for base[href] attribute...
-	if !strings.HasSuffix(parsedBaseURL.Path, "/") { // base[href] doesn't finish with /
-		// correct it to ease concatenation down the road:
-		lastIndexOfSlash := strings.LastIndex(baseUrl, "/")
-		if lastIndexOfSlash != -1 {
-			baseUrl = baseUrl[0 : lastIndexOfSlash+1] // get everything before (and including) the last /
-		}
+func handleBaseTag(rootURL string, baseHref string, aHref string) string {
+	root, _ := url.Parse(rootURL)
+	resolvedBase, _ := root.Parse(baseHref)
+
+	parsedURL, _ := url.Parse(aHref)
+	// If a[href] starts with a /, it overrides the base[href]
+	if parsedURL.Host == "" && !strings.HasPrefix(aHref, "/") {
+		aHref = path.Join(resolvedBase.Path, aHref)
 	}
-	urlType, _ := urlidentification.IdentifyURLString(hrefUrl)
-	switch urlType {
-	case urlidentification.RelativePathReference: // like subdir/somepage.html
-		if strings.HasSuffix(baseUrl, "/") {
-			hrefUrl = baseUrl + hrefUrl
-		} else {
-			hrefUrl = baseUrl + "/" + hrefUrl
-		}
-	case urlidentification.RelativeReferenceWithAbsolutePath: // like /subdir/somepage.html
-		if strings.HasSuffix(baseUrl, "/") {
-			// we need to somehow merge the colliding slashes
-			hrefUrl = baseUrl + strings.TrimLeft(hrefUrl, "/")
-		} else {
-			hrefUrl = baseUrl + hrefUrl
-		}
-	}
-	return hrefUrl
+
+	resolvedURL, _ := resolvedBase.Parse(aHref)
+	return resolvedURL.String()
 }
 
 // Scrape the document's content to gather all links
@@ -396,7 +381,7 @@ func (this *worker) processLinks(doc *goquery.Document) (result []*url.URL) {
 	urls := doc.Find("a[href]").Map(func(_ int, s *goquery.Selection) string {
 		val, _ := s.Attr("href")
 		if baseUrl != "" {
-			val = handleBaseTag(baseUrl, val)
+			val = handleBaseTag(doc.Url.String(), baseUrl, val)
 		}
 		return val
 	})

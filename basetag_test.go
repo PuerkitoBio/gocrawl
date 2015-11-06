@@ -5,6 +5,7 @@ import (
 	"github.com/PuerkitoBio/goquery"
 	"net"
 	"net/http"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -20,7 +21,6 @@ type BaseTagExtender struct {
 }
 
 func (this *BaseTagExtender) Visit(ctx *URLContext, res *http.Response, doc *goquery.Document) (interface{}, bool) {
-	// fmt.Println("ctx:", ctx.NormalizedURL().String(), "Ends with:", strings.HasSuffix(ctx.NormalizedURL().String(), "page2.html"))
 	if strings.HasSuffix(ctx.NormalizedURL().String(), "page2.html") {
 		visitedPage2 = true
 	}
@@ -80,4 +80,83 @@ func TestBaseTag(t *testing.T) {
 		panic(err)
 	}
 
+}
+
+func TestHandleBaseTag(t *testing.T) {
+	rootURL := "http://example.com"
+
+	var testCases [][]string = [][]string{
+		// base[href], a[href], expected destination
+
+		[]string{"http://other.com", "http://host.com/a", "http://host.com/a"},
+		[]string{"http://other.com", "//host.com", "http://host.com"},
+		[]string{"http://other.com", "//host.com/", "http://host.com/"},
+		[]string{"http://other.com", "//host.com/b", "http://host.com/b"},
+		[]string{"http://other.com", "/", "http://other.com/"},
+		[]string{"http://other.com", "/sub", "http://other.com/sub"},
+		[]string{"http://other.com", "/sub/", "http://other.com/sub/"},
+
+		[]string{"http://other.com/", "http://host.com/a", "http://host.com/a"},
+		[]string{"http://other.com/", "//host.com", "http://host.com"},
+		[]string{"http://other.com/", "//host.com/", "http://host.com/"},
+		[]string{"http://other.com/", "//host.com/b", "http://host.com/b"},
+		[]string{"http://other.com/", "/", "http://other.com/"},
+		[]string{"http://other.com/", "/sub", "http://other.com/sub"},
+		[]string{"http://other.com/", "/sub/", "http://other.com/sub/"},
+
+		[]string{"//other.com", "http://host.com/a", "http://host.com/a"},
+		[]string{"//other.com", "//host.com", "http://host.com"},
+		[]string{"//other.com", "//host.com/", "http://host.com/"},
+		[]string{"//other.com", "//host.com/b", "http://host.com/b"},
+		[]string{"//other.com", "/", "http://other.com/"},
+		[]string{"//other.com", "/sub", "http://other.com/sub"},
+		[]string{"//other.com", "/sub/", "http://other.com/sub/"},
+
+		[]string{"//other.com/", "http://host.com/a", "http://host.com/a"},
+		[]string{"//other.com/", "//host.com", "http://host.com"},
+		[]string{"//other.com/", "//host.com/", "http://host.com/"},
+		[]string{"//other.com/", "//host.com/b", "http://host.com/b"},
+		[]string{"//other.com/", "/", "http://other.com/"},
+		[]string{"//other.com/", "/sub", "http://other.com/sub"},
+		[]string{"//other.com/", "/sub/", "http://other.com/sub/"},
+
+		[]string{"/", "http://host.com/a", "http://host.com/a"},
+		[]string{"/", "//host.com", "http://host.com"},
+		[]string{"/", "//host.com/", "http://host.com/"},
+		[]string{"/", "//host.com/b", "http://host.com/b"},
+		[]string{"/", "/", "http://example.com/"},
+		[]string{"/", "/sub", "http://example.com/sub"},
+		[]string{"/", "/sub/", "http://example.com/sub/"},
+
+		[]string{"/sub", "http://host.com/a", "http://host.com/a"},
+		[]string{"/sub", "//host.com", "http://host.com"},
+		[]string{"/sub", "//host.com/", "http://host.com/"},
+		[]string{"/sub", "//host.com/b", "http://host.com/b"},
+		[]string{"/sub", "/", "http://example.com/"}, // 39
+		[]string{"/sub", "/sub", "http://example.com/sub"},
+		[]string{"/sub", "/sub/", "http://example.com/sub/"},
+
+		[]string{"/sub/", "http://host.com/a", "http://host.com/a"},
+		[]string{"/sub/", "//host.com", "http://host.com"},
+		[]string{"/sub/", "//host.com/", "http://host.com/"},
+		[]string{"/sub/", "//host.com/b", "http://host.com/b"},
+		[]string{"/sub/", "/", "http://example.com/"},
+		[]string{"/sub/", "/sub", "http://example.com/sub"},
+		[]string{"/sub/", "/sub/", "http://example.com/sub/"}, // 48
+
+		[]string{"/sub/index.html", "http://host.com/a", "http://host.com/a"},
+		[]string{"/sub/index.html", "//host.com", "http://host.com"},
+		[]string{"/sub/index.html", "//host.com/", "http://host.com/"},
+		[]string{"/sub/index.html", "//host.com/b", "http://host.com/b"},
+		[]string{"/sub/index.html", "/", "http://example.com/"}, // 53
+		[]string{"/sub/index.html", "/sub", "http://example.com/sub"},
+		[]string{"/sub/index.html", "/sub/", "http://example.com/sub/"},
+
+		[]string{"/sub/", "#top-of-page", "http://example.com/sub/#top-of-page"},
+		[]string{"/sub/", "?print=1", "http://example.com/sub/?print=1"},
+	}
+
+	for i, testCase := range testCases {
+		assertTrue(testCase[2] == handleBaseTag(rootURL, testCase[0], testCase[1]), strconv.Itoa(i))
+	}
 }
