@@ -12,6 +12,7 @@ import (
 	"github.com/PuerkitoBio/goquery"
 	"github.com/temoto/robotstxt.go"
 	"golang.org/x/net/html"
+	"path"
 )
 
 // The worker is dedicated to fetching and visiting a given host, respecting
@@ -360,10 +361,28 @@ func (this *worker) visitUrl(ctx *URLContext, res *http.Response) interface{} {
 	return harvested
 }
 
+func handleBaseTag(rootURL string, baseHref string, aHref string) string {
+	root, _ := url.Parse(rootURL)
+	resolvedBase, _ := root.Parse(baseHref)
+
+	parsedURL, _ := url.Parse(aHref)
+	// If a[href] starts with a /, it overrides the base[href]
+	if parsedURL.Host == "" && !strings.HasPrefix(aHref, "/") {
+		aHref = path.Join(resolvedBase.Path, aHref)
+	}
+
+	resolvedURL, _ := resolvedBase.Parse(aHref)
+	return resolvedURL.String()
+}
+
 // Scrape the document's content to gather all links
 func (this *worker) processLinks(doc *goquery.Document) (result []*url.URL) {
+	baseUrl, _ := doc.Find("base[href]").Attr("href")
 	urls := doc.Find("a[href]").Map(func(_ int, s *goquery.Selection) string {
 		val, _ := s.Attr("href")
+		if baseUrl != "" {
+			val = handleBaseTag(doc.Url.String(), baseUrl, val)
+		}
 		return val
 	})
 	for _, s := range urls {

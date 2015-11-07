@@ -1,0 +1,11 @@
+<html>
+  <head>
+    <base href="/" />
+    <base href="/subdir"/> <!-- this base tag should never be used -->
+  </head>
+  <body>
+    <h1>Page 2D Title</h1>
+    <!-- should lead us to /page3.html, NOT /subdir/page3.html -->
+    <p><a href="page3.html"></a></p>
+  </body>
+</html>
