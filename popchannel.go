@@ -14,13 +14,13 @@ func newPopChannel() popChannel {
 // The stack function ensures the specified URLs are added to the pop channel
 // with minimal blocking (since the channel is stacked, it is virtually equivalent
 // to an infinitely buffered channel).
-func (this popChannel) stack(cmd ...*URLContext) {
+func (pc popChannel) stack(cmd ...*URLContext) {
 	toStack := cmd
 	for {
 		select {
-		case this <- toStack:
+		case pc <- toStack:
 			return
-		case old := <-this:
+		case old := <-pc:
 			// Content of the channel got emptied and is now in old, so append whatever
 			// is in toStack to it, so that it can either be inserted in the channel,
 			// or appended to some other content that got through in the meantime.

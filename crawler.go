@@ -16,8 +16,9 @@ type workerResponse struct {
 	idleDeath     bool
 }
 
-// The crawler itself, the master of the whole process
+// Crawler is the web crawler that processes URLs and manages the workers.
 type Crawler struct {
+	// Options configures the Crawler, refer to the Options type for documentation.
 	Options *Options
 
 	// Internal fields
@@ -36,14 +37,19 @@ type Crawler struct {
 	workers map[string]*worker
 }
 
-// Crawler constructor with a pre-initialized Options object.
+// NewCrawlerWithOptions returns a Crawler initialized with the
+// provided Options.
 func NewCrawlerWithOptions(opts *Options) *Crawler {
 	ret := new(Crawler)
 	ret.Options = opts
 	return ret
 }
 
-// Crawler constructor with the specified extender object.
+// NewCrawler returns a Crawler initialized with the default Options'
+// values and the provided Extender. It is highly recommended to set
+// at least the Options.RobotUserAgent to the custom name of your crawler
+// before using the returned Crawler. Refer to the Options type documentation
+// for details.
 func NewCrawler(ext Extender) *Crawler {
 	return NewCrawlerWithOptions(NewOptions(ext))
 }
@@ -52,145 +58,145 @@ func NewCrawler(ext Extender) *Crawler {
 // Options settings. Execution stops either when MaxVisits is reached (if specified)
 // or when no more URLs need visiting. If an error occurs, it is returned (if
 // MaxVisits is reached, the error ErrMaxVisits is returned).
-func (this *Crawler) Run(seeds interface{}) error {
+func (c *Crawler) Run(seeds interface{}) error {
 	// Helper log function, takes care of filtering based on level
-	this.logFunc = getLogFunc(this.Options.Extender, this.Options.LogFlags, -1)
+	c.logFunc = getLogFunc(c.Options.Extender, c.Options.LogFlags, -1)
 
-	seeds = this.Options.Extender.Start(seeds)
-	ctxs := this.toURLContexts(seeds, nil)
-	this.init(ctxs)
+	seeds = c.Options.Extender.Start(seeds)
+	ctxs := c.toURLContexts(seeds, nil)
+	c.init(ctxs)
 
 	// Start with the seeds, and loop till death
-	this.enqueueUrls(ctxs)
-	err := this.collectUrls()
+	c.enqueueUrls(ctxs)
+	err := c.collectUrls()
 
-	this.Options.Extender.End(err)
+	c.Options.Extender.End(err)
 	return err
 }
 
 // Initialize the Crawler's internal fields before a crawling execution.
-func (this *Crawler) init(ctxs []*URLContext) {
+func (c *Crawler) init(ctxs []*URLContext) {
 	// Initialize the internal hosts map
-	this.hosts = make(map[string]struct{}, len(ctxs))
+	c.hosts = make(map[string]struct{}, len(ctxs))
 	for _, ctx := range ctxs {
 		// Add this normalized URL's host if it is not already there.
-		if _, ok := this.hosts[ctx.normalizedURL.Host]; !ok {
-			this.hosts[ctx.normalizedURL.Host] = struct{}{}
+		if _, ok := c.hosts[ctx.normalizedURL.Host]; !ok {
+			c.hosts[ctx.normalizedURL.Host] = struct{}{}
 		}
 	}
 
-	hostCount := len(this.hosts)
+	hostCount := len(c.hosts)
 	l := len(ctxs)
-	this.logFunc(LogTrace, "init() - seeds length: %d", l)
-	this.logFunc(LogTrace, "init() - host count: %d", hostCount)
-	this.logFunc(LogInfo, "robot user-agent: %s", this.Options.RobotUserAgent)
+	c.logFunc(LogTrace, "init() - seeds length: %d", l)
+	c.logFunc(LogTrace, "init() - host count: %d", hostCount)
+	c.logFunc(LogInfo, "robot user-agent: %s", c.Options.RobotUserAgent)
 
 	// Create a shiny new WaitGroup
-	this.wg = new(sync.WaitGroup)
+	c.wg = new(sync.WaitGroup)
 
 	// Initialize the visits fields
-	this.visited = make(map[string]struct{}, l)
-	this.pushPopRefCount, this.visits = 0, 0
+	c.visited = make(map[string]struct{}, l)
+	c.pushPopRefCount, c.visits = 0, 0
 
 	// Create the workers map and the push channel (the channel used by workers
 	// to communicate back to the crawler)
-	this.stop = make(chan struct{})
-	if this.Options.SameHostOnly {
-		this.workers, this.push = make(map[string]*worker, hostCount),
+	c.stop = make(chan struct{})
+	if c.Options.SameHostOnly {
+		c.workers, c.push = make(map[string]*worker, hostCount),
 			make(chan *workerResponse, hostCount)
 	} else {
-		this.workers, this.push = make(map[string]*worker, this.Options.HostBufferFactor*hostCount),
-			make(chan *workerResponse, this.Options.HostBufferFactor*hostCount)
+		c.workers, c.push = make(map[string]*worker, c.Options.HostBufferFactor*hostCount),
+			make(chan *workerResponse, c.Options.HostBufferFactor*hostCount)
 	}
 	// Create and pass the enqueue channel
-	this.enqueue = make(chan interface{}, this.Options.EnqueueChanBuffer)
-	this.setExtenderEnqueueChan()
+	c.enqueue = make(chan interface{}, c.Options.EnqueueChanBuffer)
+	c.setExtenderEnqueueChan()
 }
 
 // Set the Enqueue channel on the extender, based on the naming convention.
-func (this *Crawler) setExtenderEnqueueChan() {
+func (c *Crawler) setExtenderEnqueueChan() {
 	defer func() {
 		if err := recover(); err != nil {
 			// Panic can happen if the field exists on a pointer struct, but that
 			// pointer is nil.
-			this.logFunc(LogError, "cannot set the enqueue channel: %s", err)
+			c.logFunc(LogError, "cannot set the enqueue channel: %s", err)
 		}
 	}()
 
 	// Using reflection, check if the extender has a `EnqueueChan` field
 	// of type `chan<- interface{}`. If it does, set it to the crawler's
 	// enqueue channel.
-	v := reflect.ValueOf(this.Options.Extender)
+	v := reflect.ValueOf(c.Options.Extender)
 	el := v.Elem()
 	if el.Kind() != reflect.Struct {
-		this.logFunc(LogInfo, "extender is not a struct, cannot set the enqueue channel")
+		c.logFunc(LogInfo, "extender is not a struct, cannot set the enqueue channel")
 		return
 	}
 	ec := el.FieldByName("EnqueueChan")
 	if !ec.IsValid() {
-		this.logFunc(LogInfo, "extender.EnqueueChan does not exist, cannot set the enqueue channel")
+		c.logFunc(LogInfo, "extender.EnqueueChan does not exist, cannot set the enqueue channel")
 		return
 	}
 	t := ec.Type()
 	if t.Kind() != reflect.Chan || t.ChanDir() != reflect.SendDir {
-		this.logFunc(LogInfo, "extender.EnqueueChan is not of type chan<-interface{}, cannot set the enqueue channel")
+		c.logFunc(LogInfo, "extender.EnqueueChan is not of type chan<-interface{}, cannot set the enqueue channel")
 		return
 	}
 	tt := t.Elem()
 	if tt.Kind() != reflect.Interface || tt.NumMethod() != 0 {
-		this.logFunc(LogInfo, "extender.EnqueueChan is not of type chan<-interface{}, cannot set the enqueue channel")
+		c.logFunc(LogInfo, "extender.EnqueueChan is not of type chan<-interface{}, cannot set the enqueue channel")
 		return
 	}
-	src := reflect.ValueOf(this.enqueue)
+	src := reflect.ValueOf(c.enqueue)
 	ec.Set(src)
 }
 
 // Launch a new worker goroutine for a given host.
-func (this *Crawler) launchWorker(ctx *URLContext) *worker {
+func (c *Crawler) launchWorker(ctx *URLContext) *worker {
 	// Initialize index and channels
-	i := len(this.workers) + 1
+	i := len(c.workers) + 1
 	pop := newPopChannel()
 
 	// Create the worker
 	w := &worker{
 		host:    ctx.normalizedURL.Host,
 		index:   i,
-		push:    this.push,
+		push:    c.push,
 		pop:     pop,
-		stop:    this.stop,
-		enqueue: this.enqueue,
-		wg:      this.wg,
-		logFunc: getLogFunc(this.Options.Extender, this.Options.LogFlags, i),
-		opts:    this.Options,
+		stop:    c.stop,
+		enqueue: c.enqueue,
+		wg:      c.wg,
+		logFunc: getLogFunc(c.Options.Extender, c.Options.LogFlags, i),
+		opts:    c.Options,
 	}
 
 	// Increment wait group count
-	this.wg.Add(1)
+	c.wg.Add(1)
 
 	// Launch worker
 	go w.run()
-	this.logFunc(LogInfo, "worker %d launched for host %s", i, w.host)
-	this.workers[w.host] = w
+	c.logFunc(LogInfo, "worker %d launched for host %s", i, w.host)
+	c.workers[w.host] = w
 
 	return w
 }
 
 // Check if the specified URL is from the same host as its source URL, or if
 // nil, from the same host as one of the seed URLs.
-func (this *Crawler) isSameHost(ctx *URLContext) bool {
+func (c *Crawler) isSameHost(ctx *URLContext) bool {
 	// If there is a source URL, then just check if the new URL is from the same host
 	if ctx.normalizedSourceURL != nil {
 		return ctx.normalizedURL.Host == ctx.normalizedSourceURL.Host
 	}
 
 	// Otherwise, check if the URL is from one of the seed hosts
-	_, ok := this.hosts[ctx.normalizedURL.Host]
+	_, ok := c.hosts[ctx.normalizedURL.Host]
 	return ok
 }
 
 // Enqueue the URLs returned from the worker, as long as it complies with the
 // selection policies.
-func (this *Crawler) enqueueUrls(ctxs []*URLContext) (cnt int) {
+func (c *Crawler) enqueueUrls(ctxs []*URLContext) (cnt int) {
 	for _, ctx := range ctxs {
 		var isVisited, enqueue bool
 
@@ -200,12 +206,12 @@ func (this *Crawler) enqueueUrls(ctxs []*URLContext) (cnt int) {
 			continue
 		}
 		// Check if it has been visited before, using the normalized URL
-		_, isVisited = this.visited[ctx.normalizedURL.String()]
+		_, isVisited = c.visited[ctx.normalizedURL.String()]
 
 		// Filter the URL
-		if enqueue = this.Options.Extender.Filter(ctx, isVisited); !enqueue {
+		if enqueue = c.Options.Extender.Filter(ctx, isVisited); !enqueue {
 			// Filter said NOT to use this url, so continue with next
-			this.logFunc(LogIgnored, "ignore on filter policy: %s", ctx.normalizedURL)
+			c.logFunc(LogIgnored, "ignore on filter policy: %s", ctx.normalizedURL)
 			continue
 		}
 
@@ -213,14 +219,14 @@ func (this *Crawler) enqueueUrls(ctxs []*URLContext) (cnt int) {
 		// and comply with the same host policy if requested.
 		if !ctx.normalizedURL.IsAbs() {
 			// Only absolute URLs are processed, so ignore
-			this.logFunc(LogIgnored, "ignore on absolute policy: %s", ctx.normalizedURL)
+			c.logFunc(LogIgnored, "ignore on absolute policy: %s", ctx.normalizedURL)
 
 		} else if !strings.HasPrefix(ctx.normalizedURL.Scheme, "http") {
-			this.logFunc(LogIgnored, "ignore on scheme policy: %s", ctx.normalizedURL)
+			c.logFunc(LogIgnored, "ignore on scheme policy: %s", ctx.normalizedURL)
 
-		} else if this.Options.SameHostOnly && !this.isSameHost(ctx) {
+		} else if c.Options.SameHostOnly && !c.isSameHost(ctx) {
 			// Only allow URLs coming from the same host
-			this.logFunc(LogIgnored, "ignore on same host policy: %s", ctx.normalizedURL)
+			c.logFunc(LogIgnored, "ignore on same host policy: %s", ctx.normalizedURL)
 
 		} else {
 			// All is good, visit this URL (robots.txt verification is done by worker)
@@ -233,33 +239,33 @@ func (this *Crawler) enqueueUrls(ctxs []*URLContext) (cnt int) {
 			// flag. So this is an acceptable behaviour for gocrawl.
 
 			// Launch worker if required, based on the host of the normalized URL
-			w, ok := this.workers[ctx.normalizedURL.Host]
+			w, ok := c.workers[ctx.normalizedURL.Host]
 			if !ok {
 				// No worker exists for this host, launch a new one
-				w = this.launchWorker(ctx)
+				w = c.launchWorker(ctx)
 				// Automatically enqueue the robots.txt URL as first in line
 				if robCtx, e := ctx.getRobotsURLCtx(); e != nil {
-					this.Options.Extender.Error(newCrawlError(ctx, e, CekParseRobots))
-					this.logFunc(LogError, "ERROR parsing robots.txt from %s: %s", ctx.normalizedURL, e)
+					c.Options.Extender.Error(newCrawlError(ctx, e, CekParseRobots))
+					c.logFunc(LogError, "ERROR parsing robots.txt from %s: %s", ctx.normalizedURL, e)
 				} else {
-					this.logFunc(LogEnqueued, "enqueue: %s", robCtx.url)
-					this.Options.Extender.Enqueued(robCtx)
+					c.logFunc(LogEnqueued, "enqueue: %s", robCtx.url)
+					c.Options.Extender.Enqueued(robCtx)
 					w.pop.stack(robCtx)
 				}
 			}
 
 			cnt++
-			this.logFunc(LogEnqueued, "enqueue: %s", ctx.url)
-			this.Options.Extender.Enqueued(ctx)
+			c.logFunc(LogEnqueued, "enqueue: %s", ctx.url)
+			c.Options.Extender.Enqueued(ctx)
 			w.pop.stack(ctx)
-			this.pushPopRefCount++
+			c.pushPopRefCount++
 
 			// Once it is stacked, it WILL be visited eventually, so add it to the visited slice
 			// (unless denied by robots.txt, but this is out of our hands, for all we
 			// care, it is visited).
 			if !isVisited {
 				// The visited map works with the normalized URL
-				this.visited[ctx.normalizedURL.String()] = struct{}{}
+				c.visited[ctx.normalizedURL.String()] = struct{}{}
 			}
 		}
 	}
@@ -268,11 +274,11 @@ func (this *Crawler) enqueueUrls(ctxs []*URLContext) (cnt int) {
 
 // This is the main loop of the crawler, waiting for responses from the workers
 // and processing these responses.
-func (this *Crawler) collectUrls() error {
+func (c *Crawler) collectUrls() error {
 	defer func() {
-		this.logFunc(LogInfo, "waiting for goroutines to complete...")
-		this.wg.Wait()
-		this.logFunc(LogInfo, "crawler done.")
+		c.logFunc(LogInfo, "waiting for goroutines to complete...")
+		c.wg.Wait()
+		c.logFunc(LogInfo, "crawler done.")
 	}()
 
 	for {
@@ -284,52 +290,53 @@ func (this *Crawler) collectUrls() error {
 		//
 		// Check if refcount is zero - MUST be before the select statement, so that if
 		// no valid seeds are enqueued, the crawler stops.
-		if this.pushPopRefCount == 0 && len(this.enqueue) == 0 {
-			this.logFunc(LogInfo, "sending STOP signals...")
-			close(this.stop)
+		if c.pushPopRefCount == 0 && len(c.enqueue) == 0 {
+			c.logFunc(LogInfo, "sending STOP signals...")
+			close(c.stop)
 			return nil
 		}
 
 		select {
-		case res := <-this.push:
+		case res := <-c.push:
 			// Received a response, check if it contains URLs to enqueue
 			if res.visited {
-				this.visits++
-				if this.Options.MaxVisits > 0 && this.visits >= this.Options.MaxVisits {
+				c.visits++
+				if c.Options.MaxVisits > 0 && c.visits >= c.Options.MaxVisits {
 					// Limit reached, request workers to stop
-					this.logFunc(LogInfo, "sending STOP signals...")
-					close(this.stop)
+					c.logFunc(LogInfo, "sending STOP signals...")
+					close(c.stop)
 					return ErrMaxVisits
 				}
 			}
 			if res.idleDeath {
 				// The worker timed out from its Idle TTL delay, remove from active workers
-				delete(this.workers, res.host)
-				this.logFunc(LogInfo, "worker for host %s cleared on idle policy", res.host)
+				delete(c.workers, res.host)
+				c.logFunc(LogInfo, "worker for host %s cleared on idle policy", res.host)
 			} else {
-				this.enqueueUrls(this.toURLContexts(res.harvestedURLs, res.ctx.url))
-				this.pushPopRefCount--
+				c.enqueueUrls(c.toURLContexts(res.harvestedURLs, res.ctx.url))
+				c.pushPopRefCount--
 			}
 
-		case enq := <-this.enqueue:
+		case enq := <-c.enqueue:
 			// Received a command to enqueue a URL, proceed
-			ctxs := this.toURLContexts(enq, nil)
-			this.logFunc(LogTrace, "receive url(s) to enqueue %v", ctxs)
-			this.enqueueUrls(ctxs)
-		case <-this.stop:
+			ctxs := c.toURLContexts(enq, nil)
+			c.logFunc(LogTrace, "receive url(s) to enqueue %v", ctxs)
+			c.enqueueUrls(ctxs)
+		case <-c.stop:
 			return ErrInterrupted
 		}
 	}
-	panic("unreachable")
+	panic("unreachable") // Go1 compatibility
 }
 
-func (this *Crawler) Stop() {
+// Stop terminates the crawler.
+func (c *Crawler) Stop() {
 	defer func() {
 		if err := recover(); err != nil {
-			this.logFunc(LogError, "error when manually stopping crawler: %s", err)
+			c.logFunc(LogError, "error when manually stopping crawler: %s", err)
 		}
 	}()
 
 	// this channel may be closed already
-	close(this.stop)
+	close(c.stop)
 }

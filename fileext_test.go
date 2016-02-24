@@ -22,8 +22,8 @@ func newFileFetcher() *fileFetcherExtender {
 }
 
 // FileFetcher's Fetch() implementation
-func (this *fileFetcherExtender) Fetch(ctx *URLContext, userAgent string, headRequest bool) (*http.Response, error) {
-	var res *http.Response = new(http.Response)
+func (x *fileFetcherExtender) Fetch(ctx *URLContext, userAgent string, headRequest bool) (*http.Response, error) {
+	var res = new(http.Response)
 	var req *http.Request
 	var e error
 

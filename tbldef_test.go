@@ -716,8 +716,8 @@ var (
 				eMKVisit:      2,
 			},
 			customAssert: func(s *spyExtender, t *testing.T) {
-				head := s.getCalledWithCount(eMKFetch, __, __, true)
-				nohead := s.getCalledWithCount(eMKFetch, __, __, false)
+				head := s.getCalledWithCount(eMKFetch, ignore, ignore, true)
+				nohead := s.getCalledWithCount(eMKFetch, ignore, ignore, false)
 				// 3 GET: robots, page1, page3; 3 HEAD: page1, page2, page3
 				assertTrue(head == 3, "expected 3 HEAD requests, got %d", head)
 				assertTrue(nohead == 3, "expected 3 GET requests, got %d", nohead)
@@ -740,7 +740,7 @@ var (
 				eMKRequestGet: 0,
 			},
 			customAssert: func(s *spyExtender, t *testing.T) {
-				head := s.getCalledWithCount(eMKFetch, __, __, true)
+				head := s.getCalledWithCount(eMKFetch, ignore, ignore, true)
 				assertTrue(head == 0, "expected no HEAD request, got %d", head)
 			},
 		},
@@ -760,8 +760,8 @@ var (
 				eMKEnqueued:   4,
 			},
 			customAssert: func(s *spyExtender, t *testing.T) {
-				head := s.getCalledWithCount(eMKFetch, __, __, true)
-				nohead := s.getCalledWithCount(eMKFetch, __, __, false)
+				head := s.getCalledWithCount(eMKFetch, ignore, ignore, true)
+				nohead := s.getCalledWithCount(eMKFetch, ignore, ignore, false)
 				assertTrue(head == nohead-1, "expected HEAD requests to be equal to GET requests minus one (robots.txt)")
 			},
 		},
@@ -782,8 +782,8 @@ var (
 				eMKError:      1, // unknown.html HEAD request
 			},
 			customAssert: func(s *spyExtender, t *testing.T) {
-				head := s.getCalledWithCount(eMKFetch, __, __, true)
-				nohead := s.getCalledWithCount(eMKFetch, __, __, false)
+				head := s.getCalledWithCount(eMKFetch, ignore, ignore, true)
+				nohead := s.getCalledWithCount(eMKFetch, ignore, ignore, false)
 				// Head should be = 3 (page1, 2, unknown), Get should be = 3 (robots, page1, 2)
 				assertTrue(head == 3, "expected 3 HEAD requests, got %d", head)
 				assertTrue(nohead == 3, "expected 3 GET requests, got %d", nohead)
@@ -817,8 +817,8 @@ var (
 				eMKEnqueued:   3, // Page1-2 and robots
 			},
 			customAssert: func(s *spyExtender, t *testing.T) {
-				head := s.getCalledWithCount(eMKFetch, __, __, true)
-				nohead := s.getCalledWithCount(eMKFetch, __, __, false)
+				head := s.getCalledWithCount(eMKFetch, ignore, ignore, true)
+				nohead := s.getCalledWithCount(eMKFetch, ignore, ignore, false)
 				// 3 GET: robots, page1, page2; 1 HEAD: page1
 				assertTrue(head == 1, "expected 1 HEAD request, got %d", head)
 				assertTrue(nohead == 3, "expected 3 GET requests, got %d", nohead)
@@ -852,8 +852,8 @@ var (
 				eMKEnqueued:   3, // Page1-2 and robots
 			},
 			customAssert: func(s *spyExtender, t *testing.T) {
-				head := s.getCalledWithCount(eMKFetch, __, __, true)
-				nohead := s.getCalledWithCount(eMKFetch, __, __, false)
+				head := s.getCalledWithCount(eMKFetch, ignore, ignore, true)
+				nohead := s.getCalledWithCount(eMKFetch, ignore, ignore, false)
 				// 3 GET: robots, page1, page2; 1 HEAD: page2
 				assertTrue(head == 1, "expected 1 HEAD request, got %d", head)
 				assertTrue(nohead == 3, "expected 3 GET requests, got %d", nohead)
@@ -965,16 +965,15 @@ var (
 							"http://hosta/page4.html": 4,
 							"http://hosta/page5.html": 5,
 						}, false
-					} else {
-						rx := regexp.MustCompile(`/page(\d)\.html`)
-						mtch := rx.FindStringSubmatch(ctx.normalizedURL.Path)
-						i, ok := ctx.State.(int)
-						if assertTrue(ok, "expected state data to be an int for %s", ctx.normalizedURL) {
-							if page, err := strconv.Atoi(mtch[1]); err != nil {
-								panic(err)
-							} else {
-								assertTrue(page == i, "expected state for page%d.html to be %d, got %d", page, page, i)
-							}
+					}
+					rx := regexp.MustCompile(`/page(\d)\.html`)
+					mtch := rx.FindStringSubmatch(ctx.normalizedURL.Path)
+					i, ok := ctx.State.(int)
+					if assertTrue(ok, "expected state data to be an int for %s", ctx.normalizedURL) {
+						if page, err := strconv.Atoi(mtch[1]); err != nil {
+							panic(err)
+						} else {
+							assertTrue(page == i, "expected state for page%d.html to be %d, got %d", page, page, i)
 						}
 					}
 					return nil, false
@@ -1008,16 +1007,15 @@ var (
 							res[u] = i
 						}
 						return res, false
-					} else {
-						rx := regexp.MustCompile(`/page(\d)\.html`)
-						mtch := rx.FindStringSubmatch(ctx.normalizedURL.Path)
-						i, ok := ctx.State.(int)
-						if assertTrue(ok, "expected state data to be an int for %s", ctx.normalizedURL) {
-							if page, err := strconv.Atoi(mtch[1]); err != nil {
-								panic(err)
-							} else {
-								assertTrue(page == i, "expected state for page%d.html to be %d, got %d", page, page, i)
-							}
+					}
+					rx := regexp.MustCompile(`/page(\d)\.html`)
+					mtch := rx.FindStringSubmatch(ctx.normalizedURL.Path)
+					i, ok := ctx.State.(int)
+					if assertTrue(ok, "expected state data to be an int for %s", ctx.normalizedURL) {
+						if page, err := strconv.Atoi(mtch[1]); err != nil {
+							panic(err)
+						} else {
+							assertTrue(page == i, "expected state for page%d.html to be %d, got %d", page, page, i)
 						}
 					}
 					return nil, false
@@ -1132,12 +1130,12 @@ var (
 
 		&testCase{
 			name:     "EnqueueNewUrl",
-			external: testEnqueueNewUrl,
+			external: testEnqueueNewURL,
 		},
 
 		&testCase{
 			name:     "EnqueueNewUrlOnError",
-			external: testEnqueueNewUrlOnError,
+			external: testEnqueueNewURLOnError,
 		},
 	}
 )

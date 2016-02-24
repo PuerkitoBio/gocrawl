@@ -1,8 +1,8 @@
-# gocrawl
+# gocrawl [![GoDoc](https://godoc.org/github.com/PuerkitoBio/gocrawl?status.png)](http://godoc.org/github.com/PuerkitoBio/gocrawl)
 
 gocrawl is a polite, slim and concurrent web crawler written in Go.
 
-For a simpler yet more flexible web crawler you may also want to take a look at [fetchbot](https://github.com/PuerkitoBio/fetchbot), a package that builds on the experience of gocrawl.
+For a simpler yet more flexible web crawler written in a more idiomatic Go style, you may want to take a look at [fetchbot](https://github.com/PuerkitoBio/fetchbot), a package that builds on the experience of gocrawl.
 
 ## Features
 
@@ -29,6 +29,7 @@ To install a previous version, you have to `git clone https://github.com/Puerkit
 
 ## Changelog
 
+*    **2016-02-24** : Always use `Options.UserAgent` to make requests, use `Options.RobotUserAgent` only for robots.txt policy matching. Lint and vet the code a bit, better godoc documentation.
 *    **2014-11-06** : Change import paths of net/html to golang.org/x/net/html (see https://groups.google.com/forum/#!topic/golang-nuts/eD8dh3T9yyA).
 *    **v0.4.1** : now go-getable, since goquery is go-getable too.
 *    **v0.4.0** : **BREAKING CHANGES** major refactor, API changes:
@@ -50,54 +51,53 @@ To install a previous version, you have to `git clone https://github.com/Puerkit
 From `example_test.go`:
 
 ```Go
-package gocrawl
-
-import (
-  "github.com/PuerkitoBio/goquery"
-  "net/http"
-  "regexp"
-  "time"
-)
-
 // Only enqueue the root and paths beginning with an "a"
 var rxOk = regexp.MustCompile(`http://duckduckgo\.com(/a.*)?$`)
 
 // Create the Extender implementation, based on the gocrawl-provided DefaultExtender,
 // because we don't want/need to override all methods.
 type ExampleExtender struct {
-  DefaultExtender // Will use the default implementation of all but Visit() and Filter()
+    gocrawl.DefaultExtender // Will use the default implementation of all but Visit and Filter
 }
 
 // Override Visit for our need.
-func (this *ExampleExtender) Visit(ctx *URLContext, res *http.Response, doc *goquery.Document) (interface{}, bool) {
-  // Use the goquery document or res.Body to manipulate the data
-  // ...
+func (x *ExampleExtender) Visit(ctx *gocrawl.URLContext, res *http.Response, doc *goquery.Document) (interface{}, bool) {
+    // Use the goquery document or res.Body to manipulate the data
+    // ...
 
-  // Return nil and true - let gocrawl find the links
-  return nil, true
+    // Return nil and true - let gocrawl find the links
+    return nil, true
 }
 
 // Override Filter for our need.
-func (this *ExampleExtender) Filter(ctx *URLContext, isVisited bool) bool {
-  return !isVisited && rxOk.MatchString(ctx.NormalizedURL().String())
+func (x *ExampleExtender) Filter(ctx *gocrawl.URLContext, isVisited bool) bool {
+    return !isVisited && rxOk.MatchString(ctx.NormalizedURL().String())
 }
 
 func ExampleCrawl() {
-  // Set custom options
-  opts := NewOptions(new(ExampleExtender))
-  opts.CrawlDelay = 1 * time.Second
-  opts.LogFlags = LogAll
+    // Set custom options
+    opts := gocrawl.NewOptions(new(ExampleExtender))
 
-  // Play nice with ddgo when running the test!
-  opts.MaxVisits = 2
+    // should always set your robot name so that it looks for the most
+    // specific rules possible in robots.txt.
+    opts.RobotUserAgent = "Example"
+    // and reflect that in the user-agent string used to make requests,
+    // ideally with a link so site owners can contact you if there's an issue
+    opts.UserAgent = "Mozilla/5.0 (compatible; Example/1.0; +http://example.com)"
 
-  // Create crawler and start at root of duckduckgo
-  c := NewCrawlerWithOptions(opts)
-  c.Run("https://duckduckgo.com/")
+    opts.CrawlDelay = 1 * time.Second
+    opts.LogFlags = gocrawl.LogAll
 
-  // Remove "x" before Output: to activate the example (will run on go test)
+    // Play nice with ddgo when running the test!
+    opts.MaxVisits = 2
 
-  // xOutput: voluntarily fail to see log output
+    // Create crawler and start at root of duckduckgo
+    c := gocrawl.NewCrawlerWithOptions(opts)
+    c.Run("https://duckduckgo.com/")
+
+    // Remove "x" before Output: to activate the example (will run on go test)
+
+    // xOutput: voluntarily fail to see log output
 }
 ```
 
@@ -148,11 +148,11 @@ The Options type is detailed in the next section, and it offers a single constru
 ### Hooks and customizations
 <a name="hc" />
 
-The `Options` type provides the hooks and customizations offered by gocrawl. All but `Extender` are optional and have working defaults.
+The `Options` type provides the hooks and customizations offered by gocrawl. All but `Extender` are optional and have working defaults, but the `UserAgent` and `RobotUserAgent` options should be set to a custom value fitting for your project.
 
-*    **UserAgent** : The user-agent string used to fetch the pages. Defaults to the Firefox 15 on Windows user-agent string.
+*    **UserAgent** : The user-agent string used to fetch the pages. Defaults to the Firefox 15 on Windows user-agent string. Should be changed to contain a reference to your robot's name and a contact link (see the example).
 
-*    **RobotUserAgent** : The robot's user-agent string used to fetch and query robots.txt for permission to crawl an URL. Defaults to `Googlebot (gocrawl vM.m)` where `M.m` is the major and minor version of gocrawl. See the [robots exclusion protocol][robprot] ([full specification as interpreted by Google here][robspec]) for details about the rule-matching based on the robot's user agent. It is good practice to include contact information in the user agent should the site owner need to contact you.
+*    **RobotUserAgent** : The robot's user-agent string used to find a matching policy in the robots.txt file. Defaults to `Googlebot (gocrawl vM.m)` where `M.m` is the major and minor version of gocrawl. This **should always be changed to a custom value** such as the name of your project (see the example). See the [robots exclusion protocol][robprot] ([full specification as interpreted by Google here][robspec]) for details about the rule-matching based on the robot's user agent. It is good practice to include contact information in the user agent should the site owner need to contact you.
 
 *    **MaxVisits** : The maximum number of pages *visited* before stopping the crawl. Probably more useful for development purposes. Note that the Crawler will send its stop signal once this number of visits is reached, but workers may be in the process of visiting other pages, so when the crawling stops, the number of pages visited will be *at least* MaxVisits, possibly more (worst case is `MaxVisits + number of active workers`). Defaults to zero, no maximum.
 

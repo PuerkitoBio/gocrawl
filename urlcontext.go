@@ -1,18 +1,25 @@
 package gocrawl
 
 import (
-	"github.com/PuerkitoBio/purell"
 	"net/url"
 	"strings"
+
+	"github.com/PuerkitoBio/purell"
 )
 
 const (
 	robotsTxtPath = "/robots.txt"
 )
 
+// U is a convenience type definition, it is a map[*url.URL]interface{}
+// that can be used to enqueue URLs with state information.
 type U map[*url.URL]interface{}
+
+// S is a convenience type definition, it is a map[string]interface{}
+// that can be used to enqueue URLs (the string) with state information.
 type S map[string]interface{}
 
+// URLContext contains all information related to an URL to process.
 type URLContext struct {
 	HeadBeforeGet bool
 	State         interface{}
@@ -24,24 +31,32 @@ type URLContext struct {
 	normalizedSourceURL *url.URL
 }
 
-func (this *URLContext) URL() *url.URL {
-	return this.url
+// URL returns the URL.
+func (uc *URLContext) URL() *url.URL {
+	return uc.url
 }
 
-func (this *URLContext) NormalizedURL() *url.URL {
-	return this.normalizedURL
+// NormalizedURL returns the normalized URL (using Options.URLNormalizationFlags)
+// of the URL.
+func (uc *URLContext) NormalizedURL() *url.URL {
+	return uc.normalizedURL
 }
 
-func (this *URLContext) SourceURL() *url.URL {
-	return this.sourceURL
+// SourceURL returns the source URL, if any (the URL that enqueued this
+// URL).
+func (uc *URLContext) SourceURL() *url.URL {
+	return uc.sourceURL
 }
 
-func (this *URLContext) NormalizedSourceURL() *url.URL {
-	return this.normalizedSourceURL
+// NormalizedSourceURL returns the normalized form of the source URL,
+// if any (using Options.URLNormalizationFlags).
+func (uc *URLContext) NormalizedSourceURL() *url.URL {
+	return uc.normalizedSourceURL
 }
 
-func (this *URLContext) IsRobotsURL() bool {
-	return isRobotsURL(this.normalizedURL)
+// IsRobotsURL indicates if the URL is a robots.txt URL.
+func (uc *URLContext) IsRobotsURL() bool {
+	return isRobotsURL(uc.normalizedURL)
 }
 
 // Implement in a private func, because called from HttpClient also (without
@@ -53,31 +68,31 @@ func isRobotsURL(u *url.URL) bool {
 	return strings.ToLower(u.Path) == robotsTxtPath
 }
 
-func (this *URLContext) getRobotsURLCtx() (*URLContext, error) {
-	robUrl, err := this.normalizedURL.Parse(robotsTxtPath)
+func (uc *URLContext) getRobotsURLCtx() (*URLContext, error) {
+	robURL, err := uc.normalizedURL.Parse(robotsTxtPath)
 	if err != nil {
 		return nil, err
 	}
 	return &URLContext{
 		false, // Never request HEAD before GET for robots.txt
 		nil,   // Always nil state
-		robUrl,
-		robUrl,         // Normalized is same as raw
-		this.sourceURL, // Source and normalized source is same as for current context
-		this.normalizedSourceURL,
+		robURL,
+		robURL,       // Normalized is same as raw
+		uc.sourceURL, // Source and normalized source is same as for current context
+		uc.normalizedSourceURL,
 	}, nil
 }
 
-func (this *Crawler) toURLContexts(raw interface{}, src *url.URL) []*URLContext {
+func (c *Crawler) toURLContexts(raw interface{}, src *url.URL) []*URLContext {
 	var res []*URLContext
 
 	mapString := func(v S) {
 		res = make([]*URLContext, 0, len(v))
 		for s, st := range v {
-			ctx, err := this.stringToURLContext(s, src)
+			ctx, err := c.stringToURLContext(s, src)
 			if err != nil {
-				this.Options.Extender.Error(newCrawlError(nil, err, CekParseURL))
-				this.logFunc(LogError, "ERROR parsing URL %s", s)
+				c.Options.Extender.Error(newCrawlError(nil, err, CekParseURL))
+				c.logFunc(LogError, "ERROR parsing URL %s", s)
 			} else {
 				ctx.State = st
 				res = append(res, ctx)
@@ -85,10 +100,10 @@ func (this *Crawler) toURLContexts(raw interface{}, src *url.URL) []*URLContext 
 		}
 	}
 
-	mapUrl := func(v U) {
+	mapURL := func(v U) {
 		res = make([]*URLContext, 0, len(v))
 		for u, st := range v {
-			ctx := this.urlToURLContext(u, src)
+			ctx := c.urlToURLContext(u, src)
 			ctx.State = st
 			res = append(res, ctx)
 		}
@@ -97,10 +112,10 @@ func (this *Crawler) toURLContexts(raw interface{}, src *url.URL) []*URLContext 
 	switch v := raw.(type) {
 	case string:
 		// Convert a single string URL to an URLContext
-		ctx, err := this.stringToURLContext(v, src)
+		ctx, err := c.stringToURLContext(v, src)
 		if err != nil {
-			this.Options.Extender.Error(newCrawlError(nil, err, CekParseURL))
-			this.logFunc(LogError, "ERROR parsing URL %s", v)
+			c.Options.Extender.Error(newCrawlError(nil, err, CekParseURL))
+			c.logFunc(LogError, "ERROR parsing URL %s", v)
 		} else {
 			res = []*URLContext{ctx}
 		}
@@ -109,22 +124,22 @@ func (this *Crawler) toURLContexts(raw interface{}, src *url.URL) []*URLContext 
 		// Convert all strings to URLContexts
 		res = make([]*URLContext, 0, len(v))
 		for _, s := range v {
-			ctx, err := this.stringToURLContext(s, src)
+			ctx, err := c.stringToURLContext(s, src)
 			if err != nil {
-				this.Options.Extender.Error(newCrawlError(nil, err, CekParseURL))
-				this.logFunc(LogError, "ERROR parsing URL %s", s)
+				c.Options.Extender.Error(newCrawlError(nil, err, CekParseURL))
+				c.logFunc(LogError, "ERROR parsing URL %s", s)
 			} else {
 				res = append(res, ctx)
 			}
 		}
 
 	case *url.URL:
-		res = []*URLContext{this.urlToURLContext(v, src)}
+		res = []*URLContext{c.urlToURLContext(v, src)}
 
 	case []*url.URL:
 		res = make([]*URLContext, 0, len(v))
 		for _, u := range v {
-			res = append(res, this.urlToURLContext(u, src))
+			res = append(res, c.urlToURLContext(u, src))
 		}
 
 	case map[string]interface{}:
@@ -134,10 +149,10 @@ func (this *Crawler) toURLContexts(raw interface{}, src *url.URL) []*URLContext 
 		mapString(v)
 
 	case map[*url.URL]interface{}:
-		mapUrl(U(v))
+		mapURL(U(v))
 
 	case U:
-		mapUrl(v)
+		mapURL(v)
 
 	default:
 		if raw != nil {
@@ -147,27 +162,27 @@ func (this *Crawler) toURLContexts(raw interface{}, src *url.URL) []*URLContext 
 	return res
 }
 
-func (this *Crawler) stringToURLContext(str string, src *url.URL) (*URLContext, error) {
+func (c *Crawler) stringToURLContext(str string, src *url.URL) (*URLContext, error) {
 	u, err := url.Parse(str)
 	if err != nil {
 		return nil, err
 	}
-	return this.urlToURLContext(u, src), nil
+	return c.urlToURLContext(u, src), nil
 }
 
-func (this *Crawler) urlToURLContext(u, src *url.URL) *URLContext {
+func (c *Crawler) urlToURLContext(u, src *url.URL) *URLContext {
 	var rawSrc *url.URL
 
 	rawU := *u
-	purell.NormalizeURL(u, this.Options.URLNormalizationFlags)
+	purell.NormalizeURL(u, c.Options.URLNormalizationFlags)
 	if src != nil {
 		rawSrc = &url.URL{}
 		*rawSrc = *src
-		purell.NormalizeURL(src, this.Options.URLNormalizationFlags)
+		purell.NormalizeURL(src, c.Options.URLNormalizationFlags)
 	}
 
 	return &URLContext{
-		this.Options.HeadBeforeGet,
+		c.Options.HeadBeforeGet,
 		nil,
 		&rawU,
 		u,

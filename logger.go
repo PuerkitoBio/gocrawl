@@ -4,6 +4,7 @@ import (
 	"fmt"
 )
 
+// LogFlags is a set of flags that control the logging of the Crawler.
 type LogFlags uint
 
 // Log levels for the library's logger

@@ -1,8 +1,8 @@
 package gocrawl
 
 import (
-	"net"
 	"net/http"
+	"net/http/httptest"
 	"net/url"
 	"strings"
 	"testing"
@@ -83,31 +83,19 @@ func testUserAgent(t *testing.T, tc *testCase, buf bool) {
 	c.Options.CrawlDelay = 10 * time.Millisecond
 
 	// Create server
-	l, err := net.Listen("tcp", ":8080")
-	if err != nil {
-		t.Fatal(err)
-	}
-	http.HandleFunc("/robots.txt", func(w http.ResponseWriter, r *http.Request) {
+	mux := http.NewServeMux()
+	mux.HandleFunc("/robots.txt", func(w http.ResponseWriter, r *http.Request) {
 		// Expect robots.txt user agent
-		assertTrue(r.UserAgent() == c.Options.RobotUserAgent, "expected user-agent %s, got %s", c.Options.RobotUserAgent, r.UserAgent())
+		assertTrue(r.UserAgent() == c.Options.UserAgent, "expected user-agent %s, got %s", c.Options.UserAgent, r.UserAgent())
 	})
-	http.HandleFunc("/bidon", func(w http.ResponseWriter, r *http.Request) {
+	mux.HandleFunc("/bidon", func(w http.ResponseWriter, r *http.Request) {
 		// Expect crawl user agent
 		assertTrue(r.UserAgent() == c.Options.UserAgent, "expected user-agent %s, got %s", c.Options.UserAgent, r.UserAgent())
 	})
+	srv := httptest.NewServer(mux)
+	defer srv.Close()
 
-	// Start server in a separate goroutine
-	go func() {
-		http.Serve(l, nil)
-	}()
-
-	// Go crawl
-	c.Run("http://localhost:8080/bidon")
-
-	// Close listener
-	if err = l.Close(); err != nil {
-		panic(err)
-	}
+	c.Run(srv.URL + "/bidon")
 }
 
 func testRunTwiceSameInstance(t *testing.T, tc *testCase, buf bool) {
@@ -180,7 +168,7 @@ func testEnqueueChanShadowed(t *testing.T, tc *testCase, buf bool) {
 	assertIsInLog(tc.name, me.b, "extender.EnqueueChan is not of type chan<-interface{}, cannot set the enqueue channel\n", t)
 }
 
-func testEnqueueNewUrl(t *testing.T, tc *testCase, buf bool) {
+func testEnqueueNewURL(t *testing.T, tc *testCase, buf bool) {
 	ff := newFileFetcher()
 	spy := newSpy(ff, buf)
 	spy.setExtensionMethod(eMKFilter, func(ctx *URLContext, isVisited bool) bool {
@@ -212,7 +200,7 @@ func testEnqueueNewUrl(t *testing.T, tc *testCase, buf bool) {
 	assertCallCount(spy, tc.name, eMKEnqueued, 4, t) // robots.txt * 2, both Page1s
 }
 
-func testEnqueueNewUrlOnError(t *testing.T, tc *testCase, buf bool) {
+func testEnqueueNewURLOnError(t *testing.T, tc *testCase, buf bool) {
 	ff := newFileFetcher()
 	spy := newSpy(ff, buf)
 	spy.setExtensionMethod(eMKFilter, func(ctx *URLContext, isVisited bool) bool {
@@ -229,8 +217,10 @@ func testEnqueueNewUrlOnError(t *testing.T, tc *testCase, buf bool) {
 		if err.Kind == CekFetch && !once {
 			// On error, reenqueue once only
 			once = true
+			// copy the URL first, otherwise creates a race
+			u := *err.Ctx.URL()
 			spy.EnqueueChan <- map[*url.URL]interface{}{
-				err.Ctx.url: "Error",
+				&u: "Error",
 			}
 		}
 	})
