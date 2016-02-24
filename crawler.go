@@ -1,4 +1,4 @@
-// gocrawl is a polite, slim and concurrent web crawler written in Go.
+// Package gocrawl is a polite, slim and concurrent web crawler written in Go.
 package gocrawl
 
 import (

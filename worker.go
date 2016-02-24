@@ -2,6 +2,7 @@ package gocrawl
 
 import (
 	"bytes"
+	"io"
 	"io/ioutil"
 	"net/http"
 	"net/url"
@@ -9,10 +10,11 @@ import (
 	"sync"
 	"time"
 
-	"github.com/PuerkitoBio/goquery"
-	"github.com/temoto/robotstxt.go"
-	"golang.org/x/net/html"
 	"path"
+
+	"github.com/PuerkitoBio/goquery"
+	robotstxt "github.com/temoto/robotstxt.go"
+	"golang.org/x/net/html"
 )
 
 // The worker is dedicated to fetching and visiting a given host, respecting
@@ -163,15 +165,15 @@ func (this *worker) getRobotsTxtGroup(ctx *URLContext, b []byte, res *http.Respo
 	var e error
 
 	if res != nil {
-		// Get the bytes from the response body
-		b, e = ioutil.ReadAll(res.Body)
+		var buf bytes.Buffer
+		io.Copy(&buf, res.Body)
+		res.Body = ioutil.NopCloser(bytes.NewReader(buf.Bytes()))
+		data, e = robotstxt.FromResponse(res)
 		// Rewind the res.Body (by re-creating it from the bytes)
-		res.Body = ioutil.NopCloser(bytes.NewBuffer(b))
+		res.Body = ioutil.NopCloser(bytes.NewReader(buf.Bytes()))
 		// Error or not, the robots.txt has been fetched, so notify
 		this.opts.Extender.FetchedRobots(ctx, res)
-	}
-
-	if e == nil {
+	} else {
 		data, e = robotstxt.FromBytes(b)
 	}
 
@@ -184,7 +186,7 @@ func (this *worker) getRobotsTxtGroup(ctx *URLContext, b []byte, res *http.Respo
 	} else {
 		g = data.FindGroup(this.opts.RobotUserAgent)
 	}
-	return
+	return g
 }
 
 // Set the crawl delay between this request and the next.
