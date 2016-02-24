@@ -21,7 +21,7 @@ gocrawl depends on the following userland libraries:
 *    [purell][]
 *    [robotstxt.go][robots]
 
-To install:
+It requires Go1.1+ because of its indirect dependency on `golang.org/x/net/html`. To install:
 
 `go get github.com/PuerkitoBio/gocrawl`
 

@@ -326,7 +326,6 @@ func (c *Crawler) collectUrls() error {
 			return ErrInterrupted
 		}
 	}
-	panic("unreachable") // Go1 compatibility
 }
 
 // Stop terminates the crawler.
