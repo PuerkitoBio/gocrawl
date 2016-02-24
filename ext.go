@@ -119,10 +119,11 @@ func (de *DefaultExtender) ComputeDelay(host string, di *DelayInfo, lastFetch *F
 // Fetch process as any other URL.
 //
 // Two options were considered for the default Fetch implementation :
-// 1- Not following any redirections, and enqueuing the redirect-to URL,
-//    failing the current call with the 3xx status code.
-// 2- Following all redirections, enqueuing only the last one (where redirection
-//    stops). Returning the response of the next-to-last request.
+//     1- Not following any redirections, and enqueuing the redirect-to URL,
+//     failing the current call with the 3xx status code.
+//
+//     2- Following all redirections, enqueuing only the last one (where redirection
+//     stops). Returning the response of the next-to-last request.
 //
 // Ultimately, 1) was implemented, as it is the most generic solution that makes
 // sense as default for the library. It involves no "magic" and gives full control
