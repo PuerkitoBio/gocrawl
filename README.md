@@ -1,4 +1,4 @@
-# gocrawl [![GoDoc](https://godoc.org/github.com/PuerkitoBio/gocrawl?status.png)](http://godoc.org/github.com/PuerkitoBio/gocrawl)
+# gocrawl [![GoDoc](https://godoc.org/github.com/PuerkitoBio/gocrawl?status.png)](http://godoc.org/github.com/PuerkitoBio/gocrawl) [![build status](https://secure.travis-ci.org/PuerkitoBio/gocrawl.png)](http://travis-ci.org/PuerkitoBio/gocrawl)
 
 gocrawl is a polite, slim and concurrent web crawler written in Go.
 
