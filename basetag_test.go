@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"net/http"
 	"net/http/httptest"
-	"strconv"
+	"net/url"
 	"strings"
 	"testing"
 	"time"
@@ -68,7 +68,7 @@ func TestBaseTag(t *testing.T) {
 }
 
 func TestHandleBaseTag(t *testing.T) {
-	rootURL := "http://example.com"
+	rootURL, _ := url.Parse("http://example.com")
 
 	var testCases = [][]string{
 		// base[href], a[href], expected destination
@@ -141,7 +141,9 @@ func TestHandleBaseTag(t *testing.T) {
 		[]string{"/sub/", "?print=1", "http://example.com/sub/?print=1"},
 	}
 
-	for i, testCase := range testCases {
-		assertTrue(testCase[2] == handleBaseTag(rootURL, testCase[0], testCase[1]), strconv.Itoa(i))
+	for i, c := range testCases {
+		if got := handleBaseTag(rootURL, c[0], c[1]); got != c[2] {
+			t.Errorf("%d: want %s, got %s", i, c[2], got)
+		}
 	}
 }

@@ -358,17 +358,25 @@ func (w *worker) visitURL(ctx *URLContext, res *http.Response) interface{} {
 	return harvested
 }
 
-func handleBaseTag(rootURL string, baseHref string, aHref string) string {
-	root, _ := url.Parse(rootURL)
-	resolvedBase, _ := root.Parse(baseHref)
+func handleBaseTag(root *url.URL, baseHref string, aHref string) string {
+	resolvedBase, err := root.Parse(baseHref)
+	if err != nil {
+		return ""
+	}
 
-	parsedURL, _ := url.Parse(aHref)
+	parsedURL, err := url.Parse(aHref)
+	if err != nil {
+		return ""
+	}
 	// If a[href] starts with a /, it overrides the base[href]
 	if parsedURL.Host == "" && !strings.HasPrefix(aHref, "/") {
 		aHref = path.Join(resolvedBase.Path, aHref)
 	}
 
-	resolvedURL, _ := resolvedBase.Parse(aHref)
+	resolvedURL, err := resolvedBase.Parse(aHref)
+	if err != nil {
+		return ""
+	}
 	return resolvedURL.String()
 }
 
@@ -378,7 +386,7 @@ func (w *worker) processLinks(doc *goquery.Document) (result []*url.URL) {
 	urls := doc.Find("a[href]").Map(func(_ int, s *goquery.Selection) string {
 		val, _ := s.Attr("href")
 		if baseURL != "" {
-			val = handleBaseTag(doc.Url.String(), baseURL, val)
+			val = handleBaseTag(doc.Url, baseURL, val)
 		}
 		return val
 	})
