@@ -225,7 +225,7 @@ func (w *worker) fetchURL(ctx *URLContext, agent string, headRequest bool) (res 
 		if res, e = w.opts.Extender.Fetch(ctx, agent, headRequest); e != nil {
 			// Check if this is an ErrEnqueueRedirect, in which case we will enqueue
 			// the redirect-to URL.
-			if ue, y := e.(*url.Error); y {
+			if ue, ok := e.(*url.Error); ok {
 				// We have a *url.Error, check if it was returned because of an ErrEnqueueRedirect
 				if ue.Err == ErrEnqueueRedirect {
 					// Do not notify this error outside of this if block, this is not a
