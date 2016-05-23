@@ -241,7 +241,7 @@ func (w *worker) fetchURL(ctx *URLContext, agent string, headRequest bool) (res 
 					} else {
 						w.logFunc(LogTrace, "redirect to %s from %s, linked from %s", ur, ctx.URL(), ctx.SourceURL())
 						// Enqueue the redirect-to URL with the original source
-						rCtx := ctx.cloneForRedirect(ur)
+						rCtx := ctx.cloneForRedirect(ur, w.opts.URLNormalizationFlags)
 						w.enqueue <- rCtx
 					}
 				}

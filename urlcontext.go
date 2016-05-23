@@ -61,20 +61,35 @@ func (uc *URLContext) IsRobotsURL() bool {
 
 // cloneForRedirect returns a new URLContext with the given
 // destination URL with the same sourceURL and normalizedSourceURL.
-func (uc *URLContext) cloneForRedirect(dst *url.URL) *URLContext {
+func (uc *URLContext) cloneForRedirect(dst *url.URL, normFlags purell.NormalizationFlags) *URLContext {
 	var src, normalizedSrc *url.URL
 	if uc.sourceURL != nil {
 		src = &url.URL{}
 		*src = *uc.sourceURL
 	}
+	if src == nil && uc.url != nil {
+		// if the current context doesn't have a source URL, use its URL as
+		// source (e.g. for a seed URL that triggers a redirect)
+		src = &url.URL{}
+		*src = *uc.url
+	}
+
 	if uc.normalizedSourceURL != nil {
 		normalizedSrc = &url.URL{}
 		*normalizedSrc = *uc.normalizedSourceURL
 	}
+	if normalizedSrc == nil {
+		normalizedSrc = &url.URL{}
+		*normalizedSrc = *uc.normalizedURL
+	}
+
+	rawDst := &url.URL{}
+	*rawDst = *dst
+	purell.NormalizeURL(dst, normFlags)
 	return &URLContext{
 		HeadBeforeGet:       uc.HeadBeforeGet,
 		State:               uc.State,
-		url:                 dst,
+		url:                 rawDst,
 		normalizedURL:       dst,
 		sourceURL:           src,
 		normalizedSourceURL: normalizedSrc,
