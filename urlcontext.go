@@ -59,9 +59,9 @@ func (uc *URLContext) IsRobotsURL() bool {
 	return isRobotsURL(uc.normalizedURL)
 }
 
-// CloneForRedirect returns a new URLContext with the given
+// cloneForRedirect returns a new URLContext with the given
 // destination URL with the same sourceURL and normalizedSourceURL.
-func (uc *URLContext) CloneForRedirect(dst *url.URL) *URLContext {
+func (uc *URLContext) cloneForRedirect(dst *url.URL) *URLContext {
 	var src, normalizedSrc *url.URL
 	if uc.sourceURL != nil {
 		src = &url.URL{}
@@ -73,7 +73,7 @@ func (uc *URLContext) CloneForRedirect(dst *url.URL) *URLContext {
 	}
 	return &URLContext{
 		HeadBeforeGet:       uc.HeadBeforeGet,
-		State:               nil,
+		State:               uc.State,
 		url:                 dst,
 		normalizedURL:       dst,
 		sourceURL:           src,
@@ -134,6 +134,7 @@ func (c *Crawler) toURLContexts(raw interface{}, src *url.URL) []*URLContext {
 	switch v := raw.(type) {
 	case *URLContext:
 		res = []*URLContext{v}
+
 	case string:
 		// Convert a single string URL to an URLContext
 		ctx, err := c.stringToURLContext(v, src)
