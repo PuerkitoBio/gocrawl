@@ -225,7 +225,7 @@ func (w *worker) fetchURL(ctx *URLContext, agent string, headRequest bool) (res 
 		if res, e = w.opts.Extender.Fetch(ctx, agent, headRequest); e != nil {
 			// Check if this is an ErrEnqueueRedirect, in which case we will enqueue
 			// the redirect-to URL.
-			if ue, y := e.(*url.Error); y {
+			if ue, ok := e.(*url.Error); ok {
 				// We have a *url.Error, check if it was returned because of an ErrEnqueueRedirect
 				if ue.Err == ErrEnqueueRedirect {
 					// Do not notify this error outside of this if block, this is not a
@@ -239,9 +239,10 @@ func (w *worker) fetchURL(ctx *URLContext, agent string, headRequest bool) (res 
 						w.opts.Extender.Error(newCrawlError(nil, e, CekParseRedirectURL))
 						w.logFunc(LogError, "ERROR parsing redirect URL %s: %s", ue.URL, e)
 					} else {
-						// Enqueue the redirect-to URL
-						w.logFunc(LogTrace, "redirect to %s", ur)
-						w.enqueue <- ur
+						w.logFunc(LogTrace, "redirect to %s from %s, linked from %s", ur, ctx.URL(), ctx.SourceURL())
+						// Enqueue the redirect-to URL with the original source
+						rCtx := ctx.cloneForRedirect(ur, w.opts.URLNormalizationFlags)
+						w.enqueue <- rCtx
 					}
 				}
 			}

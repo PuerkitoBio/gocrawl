@@ -59,6 +59,43 @@ func (uc *URLContext) IsRobotsURL() bool {
 	return isRobotsURL(uc.normalizedURL)
 }
 
+// cloneForRedirect returns a new URLContext with the given
+// destination URL with the same sourceURL and normalizedSourceURL.
+func (uc *URLContext) cloneForRedirect(dst *url.URL, normFlags purell.NormalizationFlags) *URLContext {
+	var src, normalizedSrc *url.URL
+	if uc.sourceURL != nil {
+		src = &url.URL{}
+		*src = *uc.sourceURL
+	}
+	if src == nil && uc.url != nil {
+		// if the current context doesn't have a source URL, use its URL as
+		// source (e.g. for a seed URL that triggers a redirect)
+		src = &url.URL{}
+		*src = *uc.url
+	}
+
+	if uc.normalizedSourceURL != nil {
+		normalizedSrc = &url.URL{}
+		*normalizedSrc = *uc.normalizedSourceURL
+	}
+	if normalizedSrc == nil {
+		normalizedSrc = &url.URL{}
+		*normalizedSrc = *uc.normalizedURL
+	}
+
+	rawDst := &url.URL{}
+	*rawDst = *dst
+	purell.NormalizeURL(dst, normFlags)
+	return &URLContext{
+		HeadBeforeGet:       uc.HeadBeforeGet,
+		State:               uc.State,
+		url:                 rawDst,
+		normalizedURL:       dst,
+		sourceURL:           src,
+		normalizedSourceURL: normalizedSrc,
+	}
+}
+
 // Implement in a private func, because called from HttpClient also (without
 // an URLContext).
 func isRobotsURL(u *url.URL) bool {
@@ -110,6 +147,9 @@ func (c *Crawler) toURLContexts(raw interface{}, src *url.URL) []*URLContext {
 	}
 
 	switch v := raw.(type) {
+	case *URLContext:
+		res = []*URLContext{v}
+
 	case string:
 		// Convert a single string URL to an URLContext
 		ctx, err := c.stringToURLContext(v, src)

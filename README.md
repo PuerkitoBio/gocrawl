@@ -29,6 +29,7 @@ To install a previous version, you have to `git clone https://github.com/Puerkit
 
 ## Changelog
 
+*    **2016-05-24** : Set the `*URLContext.SourceURL()` and `*URLContext.NormalizedSourceURL()` to the original URL on redirections (see [#55][i55]). Thanks to github user [@tmatsuo][tmatsuo].
 *    **2016-02-24** : Always use `Options.UserAgent` to make requests, use `Options.RobotUserAgent` only for robots.txt policy matching. Lint and vet the code a bit, better godoc documentation.
 *    **2014-11-06** : Change import paths of net/html to golang.org/x/net/html (see https://groups.google.com/forum/#!topic/golang-nuts/eD8dh3T9yyA).
 *    **v0.4.1** : now go-getable, since goquery is go-getable too.
@@ -257,3 +258,5 @@ The [BSD 3-Clause license][bsd].
 [i10]: https://github.com/PuerkitoBio/gocrawl/issues/10
 [i9]: https://github.com/PuerkitoBio/gocrawl/issues/9
 [i14]: https://github.com/PuerkitoBio/gocrawl/issues/14
+[i55]: https://github.com/PuerkitoBio/gocrawl/issues/55
+[tmatsuo]: https://github.com/tmatsuo
