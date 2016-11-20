@@ -105,6 +105,14 @@ func isRobotsURL(u *url.URL) bool {
 	return strings.ToLower(u.Path) == robotsTxtPath
 }
 
+	func toStringArrayContextURL(list []*URLContext) string {
+	var str string
+	for _, item := range list {
+		str += item.NormalizedURL().String()
+	}
+	return str
+}
+
 func (uc *URLContext) getRobotsURLCtx() (*URLContext, error) {
 	robURL, err := uc.normalizedURL.Parse(robotsTxtPath)
 	if err != nil {

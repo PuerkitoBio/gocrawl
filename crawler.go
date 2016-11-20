@@ -320,7 +320,7 @@ func (c *Crawler) collectUrls() error {
 		case enq := <-c.enqueue:
 			// Received a command to enqueue a URL, proceed
 			ctxs := c.toURLContexts(enq, nil)
-			c.logFunc(LogTrace, "receive url(s) to enqueue %v", ctxs)
+			c.logFunc(LogTrace, "receive url(s) to enqueue %v", toStringArrayContextURL(ctxs))
 			c.enqueueUrls(ctxs)
 		case <-c.stop:
 			return ErrInterrupted
