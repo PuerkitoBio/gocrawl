@@ -29,6 +29,7 @@ To install a previous version, you have to `git clone https://github.com/Puerkit
 
 ## Changelog
 
+*    **2016-11-20** : Fix log message so that it prints enqueued URLs (thanks @oherych). Tag as v1.0.0.
 *    **2016-05-24** : Set the `*URLContext.SourceURL()` and `*URLContext.NormalizedSourceURL()` to the original URL on redirections (see [#55][i55]). Thanks to github user [@tmatsuo][tmatsuo].
 *    **2016-02-24** : Always use `Options.UserAgent` to make requests, use `Options.RobotUserAgent` only for robots.txt policy matching. Lint and vet the code a bit, better godoc documentation.
 *    **2014-11-06** : Change import paths of net/html to golang.org/x/net/html (see https://groups.google.com/forum/#!topic/golang-nuts/eD8dh3T9yyA).
