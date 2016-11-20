@@ -108,6 +108,9 @@ func isRobotsURL(u *url.URL) bool {
 	func toStringArrayContextURL(list []*URLContext) string {
 	var str string
 	for _, item := range list {
+		if len(str) != 0 {
+			str += ", "
+		}
 		str += item.NormalizedURL().String()
 	}
 	return str
