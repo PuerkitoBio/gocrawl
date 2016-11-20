@@ -1,6 +1,7 @@
 package gocrawl
 
 import (
+	"bytes"
 	"net/url"
 	"strings"
 
@@ -105,15 +106,19 @@ func isRobotsURL(u *url.URL) bool {
 	return strings.ToLower(u.Path) == robotsTxtPath
 }
 
-	func toStringArrayContextURL(list []*URLContext) string {
-	var str string
+func toStringArrayContextURL(list []*URLContext) string {
+	var buf bytes.Buffer
+
 	for _, item := range list {
-		if len(str) != 0 {
-			str += ", "
+		if buf.Len() > 0 {
+			buf.WriteString(", ")
 		}
-		str += item.NormalizedURL().String()
+		if nurl := item.NormalizedURL(); nurl != nil {
+			buf.WriteString(nurl.String())
+		}
 	}
-	return str
+
+	return buf.String()
 }
 
 func (uc *URLContext) getRobotsURLCtx() (*URLContext, error) {
