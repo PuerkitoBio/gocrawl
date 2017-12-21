@@ -876,7 +876,7 @@ var (
 				},
 			},
 			asserts: a{
-				eMKFilter:   2, // src.ca and radio-canada.ca
+				eMKFilter:   3, // src.ca and radio-canada.ca x2
 				eMKEnqueued: 2, // src.ca and robots.txt
 				eMKFetch:    2, // src.ca and robots.txt
 				eMKVisit:    0, // src.ca redirects, so no visit
