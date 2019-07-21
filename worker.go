@@ -383,8 +383,8 @@ func handleBaseTag(root *url.URL, baseHref string, aHref string) string {
 
 // Scrape the document's content to gather all links
 func (w *worker) processLinks(doc *goquery.Document) (result []*url.URL) {
-	baseURL, _ := doc.Find("base[href]").Attr("href")
-	urls := doc.Find("a[href]").Map(func(_ int, s *goquery.Selection) string {
+	baseURL, _ := doc.FindMatcher(baseHrefMatcher).Attr("href")
+	urls := doc.FindMatcher(aHrefMatcher).Map(func(_ int, s *goquery.Selection) string {
 		val, _ := s.Attr("href")
 		if baseURL != "" {
 			val = handleBaseTag(doc.Url, baseURL, val)
