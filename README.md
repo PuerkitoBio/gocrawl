@@ -29,6 +29,7 @@ To install a previous version, you have to `git clone https://github.com/Puerkit
 
 ## Changelog
 
+*    **2019-07-22** : Use pre-compiled matchers for goquery (thanks @mikefaraponov). Tag v1.0.1.
 *    **2016-11-20** : Fix log message so that it prints enqueued URLs (thanks @oherych). Tag as v1.0.0.
 *    **2016-05-24** : Set the `*URLContext.SourceURL()` and `*URLContext.NormalizedSourceURL()` to the original URL on redirections (see [#55][i55]). Thanks to github user [@tmatsuo][tmatsuo].
 *    **2016-02-24** : Always use `Options.UserAgent` to make requests, use `Options.RobotUserAgent` only for robots.txt policy matching. Lint and vet the code a bit, better godoc documentation.
@@ -216,7 +217,7 @@ With this out of the way, here are the other `Extender` functions:
 
 *    **Filter** : `Filter(ctx *URLContext, isVisited bool) bool`. Called when deciding if a URL should be enqueued for visiting. It receives the `*URLContext` and a `bool` "is visited" flag, indicating if this URL has already been visited in this crawling execution. It returns a `bool` flag ordering gocrawl to visit (`true`) or ignore (`false`) the URL. Even if the function returns `true` to enqueue the URL for visiting, the normalized form of the URL must still comply to these rules:
 
-1. It must be an absolute URL 
+1. It must be an absolute URL
 2. It must have a `http/https` scheme
 3. It must have the same host if the `SameHostOnly` flag is set
 
