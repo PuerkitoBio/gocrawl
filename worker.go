@@ -13,6 +13,7 @@ import (
 	"path"
 
 	"github.com/PuerkitoBio/goquery"
+	"github.com/andybalholm/cascadia"
 	"github.com/temoto/robotstxt"
 	"golang.org/x/net/html"
 )
@@ -381,10 +382,15 @@ func handleBaseTag(root *url.URL, baseHref string, aHref string) string {
 	return resolvedURL.String()
 }
 
+var (
+	aHrefMatcher    = cascadia.MustCompile("a[href]")
+	baseHrefMatcher = cascadia.MustCompile("base[href]")
+)
+
 // Scrape the document's content to gather all links
 func (w *worker) processLinks(doc *goquery.Document) (result []*url.URL) {
-	baseURL, _ := doc.Find("base[href]").Attr("href")
-	urls := doc.Find("a[href]").Map(func(_ int, s *goquery.Selection) string {
+	baseURL, _ := doc.FindMatcher(baseHrefMatcher).Attr("href")
+	urls := doc.FindMatcher(aHrefMatcher).Map(func(_ int, s *goquery.Selection) string {
 		val, _ := s.Attr("href")
 		if baseURL != "" {
 			val = handleBaseTag(doc.Url, baseURL, val)
