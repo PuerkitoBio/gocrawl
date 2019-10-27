@@ -75,6 +75,9 @@ type Options struct {
 
 	// Extender is the implementation of hooks to use by the crawler.
 	Extender Extender
+
+	// ParseImageTags specifies whether to parse <img> tags and include in the crawling
+	ParseImageTags bool
 }
 
 // NewOptions creates a new set of Options with default values
@@ -96,5 +99,6 @@ func NewOptions(ext Extender) *Options {
 		DefaultNormalizationFlags,
 		LogError,
 		ext,
+		false,
 	}
 }
