@@ -4,6 +4,10 @@ gocrawl is a polite, slim and concurrent web crawler written in Go.
 
 For a simpler yet more flexible web crawler written in a more idiomatic Go style, you may want to take a look at [fetchbot](https://github.com/PuerkitoBio/fetchbot), a package that builds on the experience of gocrawl.
 
+## Translations
+
+* 한국어(korean): https://github.com/PuerkitoBio/gocrawl/blob/master/doc/ko/README.md
+
 ## Features
 
 *    Full control over the URLs to visit, inspect and query (using a pre-initialized [goquery][] document)
@@ -242,6 +246,7 @@ This channel can be useful to arbitrarily enqueue URLs that would otherwise not 
 * Richard Penman
 * Dmitry Bondarenko
 * Markus Sonderegger
+* [@lionking6792](https://github.com/lionking6792)
 
 ## License
 
