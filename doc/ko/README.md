@@ -1,27 +1,27 @@
 # gocrawl [![GoDoc](https://godoc.org/github.com/PuerkitoBio/gocrawl?status.png)](http://godoc.org/github.com/PuerkitoBio/gocrawl) [![build status](https://secure.travis-ci.org/PuerkitoBio/gocrawl.png)](http://travis-ci.org/PuerkitoBio/gocrawl)
 
-gocrawl은 Go로 작성된 가볍고 협력적인 웹 크롤러입니다.
+gocrawl은 Go로 만든 가볍고 Concurrent한 웹 크롤러 입니다.
 
-더 자연스러운 Go 스타일로 작성된 더 간단하고 유연한 웹 크롤러를 보고싶다면, gocrawl 의 경험이 기반이 된 패키지인 [fetchbot](https://github.com/PuerkitoBio/fetchbot) 를 참고해 주세요.
+더 자연스러운 Go 스타일로 작성된 더 간단하고 유연한 웹 크롤러를 보고싶다면, gocrawl 의 경험이 기반이 된 패키지인 [fetchbot](https://github.com/PuerkitoBio/fetchbot) 를 참고.
 
 ## 특징 
 
-*    방문, 검사, 쿼리할 URL 에 대한 전체 제어(미리 초기화된 [goquery][] 문서 사용)
-*    호스트 당 크롤 지연 적용
-*    robots.txt 규칙에 따름 ([robotstxt.go][robots] 라이브러리 사용)
-*    goroutines 를 이용한 동시 실행
-*    설정 가능한 로깅
-*    실행 논리에 대해 후크를 제공하는 개방적이고 사용자 정의 가능한 설계 
+*    방문, 검사, 쿼리할 URL 에 대한 전체 제어(미리 초기화된 [goquery][] 사용)
+*    호스트당 크롤 지연 가능
+*    robots.txt 규칙을 잘 따름 ([robotstxt.go][robots] 라이브러리 사용)
+*    goroutines을 이용한 동시 실행
+*    로깅
+*    방문, URL필터링 등을 커스터마이징 할 수 있음
 
-## 설치와 종속성
+## 설치 방법과 의존성
 
-gocrawl 은 다음의 사용자 환경 라이브러리를 따른다:
+gocrawl은 아래 라이브러리들이 필요합니다. :
 
 *    [goquery][]
 *    [purell][]
 *    [robotstxt.go][robots]
 
- `golang.org/x/net/html`에 간접적인 종속성이 있어 Go1.1+ 를 요구한다. 설치 시:
+ `golang.org/x/net/html`에 간접적인 종속성이 있어 Go1.1+ 를 요구한다. 설치:
 
 `go get github.com/PuerkitoBio/gocrawl`
 
@@ -29,8 +29,8 @@ gocrawl 은 다음의 사용자 환경 라이브러리를 따른다:
 
 ## 변경 로그
 
-*    **2019-07-22** : goquery 를 위해 미리 컴파일된 매처들 사용 (@mikefaraponov 지원). Tag v1.0.1.
-*    **2016-11-20** : 로그 메세지가 열거된 URL들을 출력하도록 수정 (@oherych 지원). Tag as v1.0.0.
+*    **2019-07-22** : goquery 를 위해 미리 컴파일된 matcher 사용 (@mikefaraponov 지원). Tag v1.0.1.
+*    **2016-11-20** : 로그 메세지가 URL들을 출력하도록 수정 (@oherych 지원). Tag as v1.0.0.
 *    **2016-05-24** : 원래 URL 에 리다이렉션을 위해 `*URLContext.SourceURL()` 과 `*URLContext.NormalizedSourceURL()` 설정 (see [#55][i55]). 깃허브 유저 [@tmatsuo][tmatsuo] 지원.
 *    **2016-02-24** : 리퀘스트 만들기 위해 항상 `Options.UserAgent` 사용, robots.txt 정책 적용 시에만 `Options.RobotUserAgent` 사용. 코드를 좀 더 나은 godoc 문서로 보냄.
 *    **2014-11-06** : net/html 의 import 경로를 golang.org/x/net/html 로 변경 (https://groups.google.com/forum/#!topic/golang-nuts/eD8dh3T9yyA 참고).
@@ -112,7 +112,7 @@ Gocrawl 은 캐싱, 지속성 및 종근성 탐지 논리로 본격적인 인덱
 
 항상 그렇듯, 완전한 godoc 참조는 [여기][godoc]서 찾을 수 있다. 
 
-### 설계 이론적 근거
+### 설계 구조
 
 gocrawl 의 주요 사용 사례는 `robots.txt`의 제약 사항을 존중하고 지정된 호스트에 요청 사이의 *good web citizen* 크롤 지연을 적용하면서 일부 웹페이지를 크롤링하는 것이다. 다음과 같은 설계 결정사항을 따름:
 
@@ -121,7 +121,7 @@ gocrawl 의 주요 사용 사례는 `robots.txt`의 제약 사항을 존중하�
 * **크롤 지연이 없는 엣지 케이스가 지원되지만 최적화되지 않음** :지연 없이 크롤이 필요할 때 드물지만 가능한 경우  (e.g.: 자신의 서버 또는 사용량이 많은 시간 밖에 허용된 경우, 등등.), gocrawl은 지연이 거의 없지만, 최적화를 제공하지는 않는다. 그것은, 코드에 방문자 기능이 작업자로부터 분리되거나 동일한 호스트에서 동시에 복수의 작업자를 시작할 수 있는  "특별 경로"가 없다는 것이다.(사실, 이 경우가 당신의 유일한 사용 사례라면, 나는 라이브러리를 전혀 사용하지 않는 것을 추천하고 싶다. - 왜냐하면 그것에 가치가 거의 없기 때문이다-, Go의 표준 라이브러리들을 사용하고 필요한 만큼의 gorouine들을 패치함.)
 * **Extender 인터페이스는 드롭인, 완전히 캡슐화된 동작을 쓸 수 있는 수단을 제공한다** : `Extender`의 구현은 캐싱, 지속성, 다양한 패치 전략 등을 통해 코어 라이브러리를 획기적으로 향상시킬 수 있다. 그래서 `Extender.Start()` 메소드가 `Crawler.Run()` 메소드와 중복인 것, `Run`은 라이브러리로서 크롤러를 호출하는 것을 허용하고, 반면에 `Start`는 시드 URL을 선택하는 데 필요한 논리를  `Extender`에 캡슐화할 수 있게 한다. `Extender.End()`와 `Run`의 반환 값도 마찬가지다.
 
-이게 엄청난 양의 웹 페이지를 크롤하는데 사용될 수 있을 지도 모르지만(결국 이건 *패치, 방문, 입력, 반복적인 작업이다*!), 가장 현실적인 사용 사례(테스트된!)는 잘 알려져 있고 잘 정의 된 시드 버킷을 기반으로 해야 합니다. 분산 크롤러는 여러분의 친구입니다!
+비록 이것이 아마도 엄청난 양의 웹 페이지를 크롤하는데 사용될 수 있지만(결국 이건 *패치, 방문, 입력, 반복적인 매스꺼움이다*!), 가장 현실적인 사용 사례(테스트된!)는 잘 알려져 있고 잘 정의된 제한된 양의 시드 버킷에 기초해야 한다. 분산 크롤링은 이 합리적인 사용법을 넘어서야 한다면, 네 친구야.
 
 ### 크롤러
 
@@ -227,9 +227,9 @@ gocrawl 의 주요 사용 사례는 `robots.txt`의 제약 사항을 존중하�
 
 *    **Visit** : `Visit(ctx *URLContext, res *http.Response, doc *goquery.Document) (harvested interface{}, findLinks bool)`. URL 방문할 때 호출. 사용 가능한`*goquery.Document`객체와 함께 URL 컨텍스트인 `*http.Response` response 객체를 수신 (아니면 `nil` 응답 본문을 구문 분석할 수 없는 경우). 프로세스에 링크와 gocrawl이 직접 링크를 찾아야 하는지 여부를 나타내는`bool`을 반환. ( 가능한 형식 확인하려면 [above](#types) 참고). 플래그가 `true`면, `harvested` 반환 값은 무시되고 입력할 링크를 위해 gocrawl은 goquery 문서를 검색. `false`면, `harvested` 데이터는 입력된다. `DefaultExtender.Visit` 구현은 `nil, true`을 반환하여 방문 페이지의 링크를 자동으로 찾아서 처리하도록 한다.
 
-*    **Visited** : `Visited(ctx *URLContext, harvested interface{})`.페이지를 방문한 후 호출됨. 방문 중에 발견된 URL 컨텍스트 및 URL들은 인자로 전달됨.(`Visit` 기능이나 gocrawl 에 의해) . 기본적으로 이 방법은 금지되어 있다.
+*    **Visited** : `Visited(ctx *URLContext, harvested interface{})`. 페이지를 방문한 후 호출됨. 방문 중에 발견된 URL 컨텍스트 및 URL들은 인자로 전달됨.(`Visit` 기능이나 gocrawl 에 의해). 기본적으로 이 함수는 비어 있습니다.
 
-*    **Disallowed** : `Disallowed(ctx *URLContext)`. 입력된 URL이 robots.txt 정책에 의해 거부될 때 호출된다. 기본적으로 이 방법은 금지되어 있다.
+*    **Disallowed** : `Disallowed(ctx *URLContext)`. 입력된 URL이 robots.txt 정책에 의해 거부될 때 호출된다. 기본적으로 이 함수는 비어있습니다.
 
 마지막으로, 관례상, 매우 구체적인 유형의 `chan<- interface{}`를 가진 `EnqueueChan`이라는 필드가 존재하여 `Extender` 인스턴스에서 접속할 수 있는 경우, 이 필드는 [the expected types](#types)을 URL을 입력하기 위한 데이터로 받아들이는 입력 채널로 설정된다. 그러면 이 데이터는 마치 방문에서 수확한 것처럼 크롤러에 의해 처리될 것이다. `Filter()`에 대한 호출을 촉발하고, 하영될 경우 패치되고 방문하게 된다.
 
@@ -242,8 +242,9 @@ gocrawl 의 주요 사용 사례는 `robots.txt`의 제약 사항을 존중하�
 * Richard Penman
 * Dmitry Bondarenko
 * Markus Sonderegger
+* @lionking6792
 
-## 라이선스
+## License
 
 [BSD 3-Clause license][bsd].
 
