@@ -33,6 +33,7 @@ To install a previous version, you have to `git clone https://github.com/Puerkit
 
 ## Changelog
 
+*    **2021-05-19** : Use Go modules for dependencies. Tag v1.1.0.
 *    **2019-07-22** : Use pre-compiled matchers for goquery (thanks @mikefaraponov). Tag v1.0.1.
 *    **2016-11-20** : Fix log message so that it prints enqueued URLs (thanks @oherych). Tag as v1.0.0.
 *    **2016-05-24** : Set the `*URLContext.SourceURL()` and `*URLContext.NormalizedSourceURL()` to the original URL on redirections (see [#55][i55]). Thanks to github user [@tmatsuo][tmatsuo].
