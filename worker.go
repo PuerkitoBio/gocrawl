@@ -385,6 +385,7 @@ func handleBaseTag(root *url.URL, baseHref string, aHref string) string {
 var (
 	aHrefMatcher    = cascadia.MustCompile("a[href]")
 	baseHrefMatcher = cascadia.MustCompile("base[href]")
+	imgSrcMatcher   = cascadia.MustCompile("img[src]")
 )
 
 // Scrape the document's content to gather all links
@@ -397,6 +398,16 @@ func (w *worker) processLinks(doc *goquery.Document) (result []*url.URL) {
 		}
 		return val
 	})
+	if w.opts.ParseImageTags {
+		imgURLs := doc.FindMatcher(imgSrcMatcher).Map(func(_ int, s *goquery.Selection) string {
+			val, _ := s.Attr("src")
+			if baseURL != "" {
+				val = handleBaseTag(doc.Url, baseURL, val)
+			}
+			return val
+		})
+		urls = append(urls, imgURLs...)
+	}
 	for _, s := range urls {
 		// If href starts with "#", then it points to this same exact URL, ignore (will fail to parse anyway)
 		if len(s) > 0 && !strings.HasPrefix(s, "#") {
