@@ -15,6 +15,7 @@ const (
 	DefaultCrawlDelay         time.Duration             = 5 * time.Second
 	DefaultIdleTTL            time.Duration             = 10 * time.Second
 	DefaultNormalizationFlags purell.NormalizationFlags = purell.FlagsAllGreedy
+	DefaultReadLimit          int64                     = -1
 )
 
 // Options contains the configuration for a Crawler to customize the
@@ -49,6 +50,9 @@ type Options struct {
 	// then this delay is used instead. Crawl delay can be customized
 	// further by implementing the ComputeDelay extender function.
 	CrawlDelay time.Duration
+
+	// Max count of bytes to read from the response body. -1 for no limit.
+	ReadLimit int64
 
 	// WorkerIdleTTL is the idle time-to-live allowed for a worker
 	// before it is cleared (its goroutine terminated). The crawl
@@ -90,6 +94,7 @@ func NewOptions(ext Extender) *Options {
 		DefaultEnqueueChanBuffer,
 		DefaultHostBufferFactor,
 		DefaultCrawlDelay,
+		DefaultReadLimit,
 		DefaultIdleTTL,
 		true,
 		false,

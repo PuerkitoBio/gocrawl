@@ -329,7 +329,11 @@ func (w *worker) visitURL(ctx *URLContext, res *http.Response) interface{} {
 	var doLinks bool
 
 	// Load a goquery document and call the visitor function
-	if bd, e := ioutil.ReadAll(res.Body); e != nil {
+	r := io.Reader(res.Body)
+	if w.opts.ReadLimit != -1 {
+		r = io.LimitReader(r, w.opts.ReadLimit)
+	}
+	if bd, e := ioutil.ReadAll(r); e != nil {
 		w.opts.Extender.Error(newCrawlError(ctx, e, CekReadBody))
 		w.logFunc(LogError, "ERROR reading body %s: %s", ctx.url, e)
 	} else {

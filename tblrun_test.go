@@ -78,6 +78,7 @@ func runTestCase(t *testing.T, tc *testCase) {
 			tc.opts.LogFlags = LogAll
 		}
 		tc.opts.Extender = spy
+		tc.opts.ReadLimit = -1
 		c := NewCrawlerWithOptions(tc.opts)
 		if tc.funcs != nil {
 			for emk, f := range tc.funcs {
